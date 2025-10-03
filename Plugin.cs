@@ -13,20 +13,19 @@ public class Plugin : BaseUnityPlugin
     internal static new ManualLogSource Logger; // propagate to other static methods here
 	private readonly Harmony harmony = new Harmony(modGUID);
     
-    private static bool IsAPaneOpenThisFrame = false;
-    private static bool IsTabSwitching = false;
-    private static bool IsInventoryOpen 
-        {
-            get { return IsAPaneOpenThisFrame || IsTabSwitching; } 
-        }
+    private static bool SwitchedPanesThisFrame = false;
+    private static bool IsInventoryOpen() 
+    {
+        if(TabbingControlFSM == null) return false;
+        return TabbingControlFSM.ActiveStateName != "Closed"; 
+    }
 
     private static UnityEngine.Camera HudCamera = null;
     private static PlayMakerFSM TabbingControlFSM = null; // Inventory - Inventory Control
+    private static PlayMakerFSM PanesCursorControlFsm = null; // {X_pane} - Inventory Proxy
     // public static PlayMakerFSM InvFsm = null; // Inv - Inventory Proxy
     // private static InventoryItemCollectableManager InvItemMgr;
     
-    private static BoxCollider2D LeftArrowCollider = null;
-    private static BoxCollider2D RightArrowCollider = null;
 
     private void Awake() // Mod startup
     {
@@ -34,6 +33,71 @@ public class Plugin : BaseUnityPlugin
         Logger.LogInfo($"Plugin {MyPluginInfo.PLUGIN_GUID} is loaded!");
 		
 		harmony.PatchAll();
+    }
+
+    public class OnClickClass : MonoBehaviour
+    {
+        private bool MouseAlreadyIn = false;
+        
+        public void OnMouseUp()
+        {
+            // Logger.LogDebug("MouseUp"); // for implementing alternate mouseclick modes
+        }
+
+        public void OnMouseDown()
+        {
+            if(!IsInventoryOpen()) return;
+            // Logger.LogDebug("I was clicked");
+            ClickFunction();
+        }
+
+        public void OnMouseOver() // every frame
+        {
+            // every frame
+            if(!IsInventoryOpen()) return;
+            if(MouseAlreadyIn && !SwitchedPanesThisFrame) return;
+            // only once, OR if just switched frames
+            // Issue: Cursor ZIPS to mouse-over after switching -- any way to just start on element?
+            MouseAlreadyIn = true; // only once
+            MouseOverFunction();
+            // Logger.LogDebug("Mouseover");
+        }
+
+        public void OnMouseExit() // once
+        {
+            MouseAlreadyIn = false;
+            // Logger.LogDebug("Mouse left");
+        }
+
+        protected virtual void ClickFunction()
+        {
+            // Logger.LogDebug("Inner");
+            PanesCursorControlFsm.SendEvent("UI CONFIRM");
+        }
+
+        protected virtual void MouseOverFunction()
+        {
+            // Logger.LogDebug("Targeting wrong method");
+            // do nothing
+        }
+    }
+
+    public class OnClickBorderArrow : OnClickClass
+    {
+        public string stateName;
+
+        protected override void ClickFunction()
+        {
+            // Logger.LogDebug("Outer");
+
+            base.ClickFunction();
+        }
+        
+        protected override void MouseOverFunction()
+        {
+            // Logger.LogDebug("Targeting correct method");
+            PanesCursorControlFsm.SetState(stateName);
+        }
     }
 
     private static string SafeToString(System.Object ob) // helper
@@ -121,14 +185,39 @@ public class Plugin : BaseUnityPlugin
             
             try {
                 UnityEngine.Transform arrowsTfm = inventoryTfm.Find("Border").Find("Arrows");
+
+                OnClickBorderArrow scriptAdded = 
+                    arrowsTfm.Find("Arrow Left").gameObject.AddComponent<OnClickBorderArrow>();
+                scriptAdded.stateName = "L Arrow";
+
                 
-                LeftArrowCollider = arrowsTfm.Find("Arrow Left").GetComponent<BoxCollider2D>();
-                RightArrowCollider = arrowsTfm.Find("Arrow Right").GetComponent<BoxCollider2D>();
+                OnClickBorderArrow scriptAdded2 = 
+                    arrowsTfm.Find("Arrow Right").gameObject.AddComponent<OnClickBorderArrow>();
+                scriptAdded2.stateName = "R Arrow";
+                
             } catch (Exception e) {
-                Logger.LogError("Getting Arrow Colliders Failed");
+                Logger.LogError("Setting up Arrow click scripts Failed");
                 Logger.LogError(e.Message);
             }
             
+            try {
+                UnityEngine.Transform tabIconSet = inventoryTfm.Find("Border").Find("PaneListDisplay").Find("List Items");
+                
+                foreach(UnityEngine.Transform tabIcon in tabIconSet) // loop CHILDREN (not components)
+                {
+                    BoxCollider2D addedColl = tabIcon.gameObject.AddComponent<BoxCollider2D>();
+                    Logger.LogInfo("addedColl" + SafeToString(addedColl));
+                    // if(tabIcon.gameObject.activeInHierarchy); sometimes invisible? :shrug:
+                    // Logger.LogInfo(SafeToString(item));
+
+                    // InventoryPaneListItem
+                    // no collision boxes
+                }
+            } catch (Exception e) {
+                Logger.LogError("Getting Tabs Failed");
+                Logger.LogError(e.Message);
+            }
+
             /*
             try {
                 UnityEngine.Transform invTfm = inventoryTfm.Find("Inv");
@@ -157,11 +246,10 @@ public class Plugin : BaseUnityPlugin
             , ref bool value // hook value arg to pass to real SetCursorVisible function
             )
         {
-            if(IsInventoryOpen)
+            // polling
+            if(IsInventoryOpen())
             {
                 value = true; // override mouse cursor - set it visible
-                IsAPaneOpenThisFrame = false; // reset for next frame (for if it closes)
-                // Logger.LogDebug("Overridden");
             }
         }
     }
@@ -174,8 +262,8 @@ public class Plugin : BaseUnityPlugin
         {
             // while inventory open, disable attack
             // to make more consistent, could check for attack (or 'bind/focus/spell') binding being mouseclick
-            if(IsInventoryOpen) __instance.inputActions.Attack.Enabled = false;
-            else                __instance.inputActions.Attack.Enabled = true;
+            if(IsInventoryOpen()) __instance.inputActions.Attack.Enabled = false;
+            else                  __instance.inputActions.Attack.Enabled = true;
         }
     }
 
@@ -201,43 +289,18 @@ public class Plugin : BaseUnityPlugin
 
             try { // if we error, please tell us why :/
 
-                IsTabSwitching = false; // if in pane, any tab switching is finished.
-                IsAPaneOpenThisFrame = true;
-                bool mouseOveredElement = false;
-
-                PlayMakerFSM panesCursorControlFsm = GetCursorControlFSM(__instance); // note: if retrieval is expensive (haven't checked), it's possible to do at setup instead, and map with ___paneControl 
+                // Which pane? (get FSM)
+                PlayMakerFSM currentPaneFsm = GetCursorControlFSM(__instance); // note: if retrieval is expensive (haven't checked), it's possible to do at setup instead, and map with ___paneControl 
                 // if this isn't found, we're already doomed.
-
-                var mousepos = HudCamera.ScreenToWorldPoint(Input.mousePosition);
-
-                // TODO: Bug - if arrows don't exist yet (0.0001% of the game), still selectable
-                if(LeftArrowCollider!= null && LeftArrowCollider.OverlapPoint(mousepos))
+                
+                SwitchedPanesThisFrame = false;
+                if(PanesCursorControlFsm != currentPaneFsm)
                 {
-		            // Logger.LogDebug("Mouseover"); // Mouseover works! (finally)
-                    
-                    // Appearance works perfectly!! (function doesn't :/)
-                    // Inv only!
-                    // if(InvItemMgr != null) InvItemMgr.SetSelected(LeftArrowCollider.gameObject);
-
-                    panesCursorControlFsm.SetState("L Arrow");
-                    // TODO: cursor appearance doesn't always update.
-                    mouseOveredElement = true;
-                }
-
-                if(RightArrowCollider!= null && RightArrowCollider.OverlapPoint(mousepos))
-                {
-                    panesCursorControlFsm.SetState("R Arrow");
-                    mouseOveredElement = true;
+                    SwitchedPanesThisFrame = true; // duration = ~1 frame
+                    PanesCursorControlFsm = currentPaneFsm;
                 }
                 
 
-                bool mouseButtonJustPressed = Input.GetMouseButtonDown(0);
-                if(mouseButtonJustPressed && mouseOveredElement)
-                {
-                    // Logger.LogDebug("Mouse button just pressed");
-                    panesCursorControlFsm.SendEvent("UI CONFIRM");
-                    IsTabSwitching = true;
-                }
 
             } catch (Exception e) {
                 Logger.LogError("Error: " + e.Message);
