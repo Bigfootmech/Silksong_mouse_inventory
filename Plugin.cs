@@ -138,10 +138,6 @@ public class Plugin : BaseUnityPlugin
     {
         // InventoryItemSelectable OwnSelectable;
 
-        protected override void ClickFunction()
-        {
-            // Logger.LogInfo("Clicked inv item");
-        }
         
         protected override void MouseOverFunction()
         {
@@ -212,14 +208,6 @@ public class Plugin : BaseUnityPlugin
         return null;
     }
 
-    /*
-    private static bool IsMouseover(BoxCollider2D coll)
-    {
-        if(coll == null || HudCamera == null) return false;
-
-        return coll.OverlapPoint(HudCamera.ScreenToWorldPoint(Input.mousePosition));
-    }*/
-
     [HarmonyPatch(typeof(InventoryPaneList), "Start")]
     public class AfterInventoryIsCreated_Setup
     {
@@ -285,41 +273,41 @@ public class Plugin : BaseUnityPlugin
                 Logger.LogError("Getting Tabs Failed");
                 Logger.LogError(e.Message);
             }
-
-
-            try {
-                UnityEngine.Transform invTfm = inventoryTfm.Find("Inv");
-                UnityEngine.Transform needleTfm = invTfm.Find("Inv_Items").Find("Needle");
-                // InventoryItemNail nailScript = needleTfm.GetComponent<InventoryItemNail>();
-
-                needleTfm.gameObject.AddComponent<OnClickInventoryItem>();
-
-            } catch (Exception e) {
-                Logger.LogError("Getting Needle Failed");
-                Logger.LogError(e.Message);
-            }
+            
             
             try {
                 UnityEngine.Transform invTfm = inventoryTfm.Find("Inv");
                 UnityEngine.Transform currencyAndSpoolGroupTfm = invTfm.Find("Inv_Items").Find("Needle Shift");
                 foreach(Transform child in currencyAndSpoolGroupTfm) {
-                    if(child.name == "Spool Group")
-                    {
-                        child.Find("Spool").gameObject.AddComponent<OnClickInventoryItem>();
-                        Transform abilities = child.Find("Radial Layout");
-                        foreach(Transform ability in abilities)
-                        {
-                            ability.gameObject.AddComponent<OnClickInventoryItem>();
-                        }
-                    }
-                    else
+                    if(child.name != "Spool Group")
                         child.gameObject.AddComponent<OnClickInventoryItem>();
                 }
             } catch (Exception e) {
-                Logger.LogError("Getting Needle-side Failed");
+                Logger.LogError("Failed attaching onclick to missed inv items");
                 Logger.LogError(e.Message);
             }
+
 	    }
+    }
+    
+
+    [HarmonyPatch(typeof(InventoryItemSelectable), "add_OnSelected")]
+    public class TryOnSelected
+    {
+        [HarmonyPrefix]
+        static void Prefix(InventoryItemSelectable __instance
+            , System.Action<InventoryItemSelectable> __0
+            )
+        {
+            // Logger.LogInfo("Does this even run? add_OnSelected");
+            // Logger.LogInfo("inst? " + SafeToString(__instance));
+            // Logger.LogInfo("__0? " + SafeToString(__0));
+            // Logger.LogInfo("type? " + SafeToString(__instance.GetType()));
+            // var obj = __instance.gameObject;
+            // Logger.LogInfo("obj = " + SafeToString(obj));
+            __instance.gameObject.AddComponent<OnClickInventoryItem>();
+            // Logger.LogInfo("Added click component?");
+        }
     }
 
     [HarmonyPatch(typeof(InputHandler), "SetCursorVisible")]
