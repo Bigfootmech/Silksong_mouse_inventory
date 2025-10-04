@@ -27,6 +27,7 @@ public class Plugin : BaseUnityPlugin
     // public static PlayMakerFSM InvFsm = null; // Inv - Inventory Proxy
     private static InventoryPaneList PaneList = null;
     // private static InventoryItemCollectableManager InvItemMgr;
+
     
 
     private void Awake() // Mod startup
@@ -130,6 +131,39 @@ public class Plugin : BaseUnityPlugin
         private InventoryPaneList.PaneTypes GetPaneType(string paneName)
         {
             return (InventoryPaneList.PaneTypes) PaneList.GetPaneIndex(paneName);
+        }
+    }
+
+    public class OnClickInventoryItem : OnClickClass
+    {
+        // InventoryItemSelectable OwnSelectable;
+
+        protected override void ClickFunction()
+        {
+            // Logger.LogInfo("Clicked inv item");
+        }
+        
+        protected override void MouseOverFunction()
+        {
+            var ownSelectable = GetOwnSelectable();
+
+            // Logger.LogInfo("Mouseover inv item");
+            if(ownSelectable == null)
+            {
+                Logger.LogError("selectable is null for " + this.gameObject.name);
+                return;
+
+            }
+
+            // again, only visible :/ (not description update)
+            InventoryItemManager InvItemMgr = CurrentPaneObject.GetComponent<InventoryItemManager>();
+            // InvItemMgr.SetSelected(this.gameObject);
+            InvItemMgr.SetSelected(ownSelectable,null);
+        }
+
+        private InventoryItemSelectable GetOwnSelectable()
+        {
+            return this.gameObject.GetComponent<InventoryItemSelectable>();
         }
     }
 
@@ -253,23 +287,38 @@ public class Plugin : BaseUnityPlugin
             }
 
 
-            /*
             try {
                 UnityEngine.Transform invTfm = inventoryTfm.Find("Inv");
+                UnityEngine.Transform needleTfm = invTfm.Find("Inv_Items").Find("Needle");
+                // InventoryItemNail nailScript = needleTfm.GetComponent<InventoryItemNail>();
+
+                needleTfm.gameObject.AddComponent<OnClickInventoryItem>();
+
             } catch (Exception e) {
-                Logger.LogError("Getting InvItemMgr Failed");
+                Logger.LogError("Getting Needle Failed");
                 Logger.LogError(e.Message);
             }
-            */
-
             
-            /*
-            
-            UnityEngine.Transform needleTfm = invTfm.Find("Inv_Items").Find("Needle");
-            
-            InventoryItemNail nailScript = needleTfm.GetComponent<InventoryItemNail>();
-            
-             */
+            try {
+                UnityEngine.Transform invTfm = inventoryTfm.Find("Inv");
+                UnityEngine.Transform currencyAndSpoolGroupTfm = invTfm.Find("Inv_Items").Find("Needle Shift");
+                foreach(Transform child in currencyAndSpoolGroupTfm) {
+                    if(child.name == "Spool Group")
+                    {
+                        child.Find("Spool").gameObject.AddComponent<OnClickInventoryItem>();
+                        Transform abilities = child.Find("Radial Layout");
+                        foreach(Transform ability in abilities)
+                        {
+                            ability.gameObject.AddComponent<OnClickInventoryItem>();
+                        }
+                    }
+                    else
+                        child.gameObject.AddComponent<OnClickInventoryItem>();
+                }
+            } catch (Exception e) {
+                Logger.LogError("Getting Needle-side Failed");
+                Logger.LogError(e.Message);
+            }
 	    }
     }
 
