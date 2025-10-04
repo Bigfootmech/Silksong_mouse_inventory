@@ -22,8 +22,10 @@ public class Plugin : BaseUnityPlugin
 
     private static UnityEngine.Camera HudCamera = null;
     private static PlayMakerFSM TabbingControlFSM = null; // Inventory - Inventory Control
-    private static PlayMakerFSM PanesCursorControlFsm = null; // {X_pane} - Inventory Proxy
+    private static PlayMakerFSM CurrentPanesCursorControlFsm = null; // {X_pane} - Inventory Proxy
+    private static GameObject CurrentPaneObject = null;
     // public static PlayMakerFSM InvFsm = null; // Inv - Inventory Proxy
+    private static InventoryPaneList PaneList = null;
     // private static InventoryItemCollectableManager InvItemMgr;
     
 
@@ -72,7 +74,7 @@ public class Plugin : BaseUnityPlugin
         protected virtual void ClickFunction()
         {
             // Logger.LogDebug("Inner");
-            PanesCursorControlFsm.SendEvent("UI CONFIRM");
+            CurrentPanesCursorControlFsm.SendEvent("UI CONFIRM");
         }
 
         protected virtual void MouseOverFunction()
@@ -96,7 +98,38 @@ public class Plugin : BaseUnityPlugin
         protected override void MouseOverFunction()
         {
             // Logger.LogDebug("Targeting correct method");
-            PanesCursorControlFsm.SetState(stateName);
+            CurrentPanesCursorControlFsm.SetState(stateName);
+        }
+    }
+
+    public class OnClickTab : OnClickClass
+    {
+        protected override void ClickFunction()
+        {
+            // Logger.LogInfo("Go to Pane " + SafeToString(targetPane));
+            SwitchInventoryTabTo(GetTargetPane());
+        }
+        
+        protected override void MouseOverFunction()
+        {
+            InventoryItemManager InvItemMgr = CurrentPaneObject.GetComponent<InventoryItemManager>();
+            InvItemMgr.SetSelected(this.gameObject);
+        }
+
+        private InventoryPaneList.PaneTypes GetTargetPane() // not available at inventory start
+        {
+            var paneScript = this.gameObject.GetComponent<InventoryPaneListItem>();
+            return GetPaneType(paneScript.currentPane);
+        }
+
+        private InventoryPaneList.PaneTypes GetPaneType(InventoryPane pane)
+        {
+            return (InventoryPaneList.PaneTypes) PaneList.GetPaneIndex(pane);
+        }
+
+        private InventoryPaneList.PaneTypes GetPaneType(string paneName)
+        {
+            return (InventoryPaneList.PaneTypes) PaneList.GetPaneIndex(paneName);
         }
     }
 
@@ -162,8 +195,11 @@ public class Plugin : BaseUnityPlugin
 		    // , ref AsyncOperation ___loadop
 		    )
 	    {
+
             if(__instance == null) Logger.LogError("Inventory Setup Hook Failed");
 		    // Logger.LogDebug("Inventory Started!");
+            
+            PaneList = __instance;
 
             UnityEngine.Transform inventoryTfm = __instance.transform;
 
@@ -206,28 +242,27 @@ public class Plugin : BaseUnityPlugin
                 foreach(UnityEngine.Transform tabIcon in tabIconSet) // loop CHILDREN (not components)
                 {
                     BoxCollider2D addedColl = tabIcon.gameObject.AddComponent<BoxCollider2D>();
-                    Logger.LogInfo("addedColl" + SafeToString(addedColl));
-                    // if(tabIcon.gameObject.activeInHierarchy); sometimes invisible? :shrug:
-                    // Logger.LogInfo(SafeToString(item));
+                    // Logger.LogInfo("addedColl " + SafeToString(addedColl));
+                    OnClickTab addedScript = tabIcon.gameObject.AddComponent<OnClickTab>();
+                    // Logger.LogInfo("addedScript " + SafeToString(addedScript));
 
-                    // InventoryPaneListItem
-                    // no collision boxes
                 }
             } catch (Exception e) {
                 Logger.LogError("Getting Tabs Failed");
                 Logger.LogError(e.Message);
             }
 
+
             /*
             try {
                 UnityEngine.Transform invTfm = inventoryTfm.Find("Inv");
-                InvItemMgr = invTfm.GetComponent<InventoryItemCollectableManager>();
             } catch (Exception e) {
                 Logger.LogError("Getting InvItemMgr Failed");
                 Logger.LogError(e.Message);
             }
             */
-        
+
+            
             /*
             
             UnityEngine.Transform needleTfm = invTfm.Find("Inv_Items").Find("Needle");
@@ -291,13 +326,14 @@ public class Plugin : BaseUnityPlugin
 
                 // Which pane? (get FSM)
                 PlayMakerFSM currentPaneFsm = GetCursorControlFSM(__instance); // note: if retrieval is expensive (haven't checked), it's possible to do at setup instead, and map with ___paneControl 
+                CurrentPaneObject = __instance.gameObject;
                 // if this isn't found, we're already doomed.
                 
                 SwitchedPanesThisFrame = false;
-                if(PanesCursorControlFsm != currentPaneFsm)
+                if(CurrentPanesCursorControlFsm != currentPaneFsm)
                 {
                     SwitchedPanesThisFrame = true; // duration = ~1 frame
-                    PanesCursorControlFsm = currentPaneFsm;
+                    CurrentPanesCursorControlFsm = currentPaneFsm;
                 }
                 
 
