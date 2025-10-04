@@ -82,7 +82,7 @@ public class Plugin : BaseUnityPlugin
         protected virtual void MouseOverFunction()
         {
             // Logger.LogDebug("Targeting wrong method");
-            // do nothing
+            CurrentPanesCursorControlFsm.SetState("Accept Input"); // reset state if was at arrow
         }
     }
 
@@ -156,6 +156,8 @@ public class Plugin : BaseUnityPlugin
             InventoryItemManager InvItemMgr = CurrentPaneObject.GetComponent<InventoryItemManager>();
             // InvItemMgr.SetSelected(this.gameObject);
             InvItemMgr.SetSelected(ownSelectable,null);
+
+            base.MouseOverFunction();
         }
 
         private InventoryItemSelectable GetOwnSelectable()
@@ -275,7 +277,6 @@ public class Plugin : BaseUnityPlugin
                 Logger.LogError(e.Message);
             }
             
-            
             try {
                 UnityEngine.Transform invTfm = inventoryTfm.Find("Inv");
                 UnityEngine.Transform currencyAndSpoolGroupTfm = invTfm.Find("Inv_Items").Find("Needle Shift");
@@ -287,7 +288,6 @@ public class Plugin : BaseUnityPlugin
                 Logger.LogError("Failed attaching onclick to missed inv items");
                 Logger.LogError(e.Message);
             }
-
 	    }
     }
     
@@ -305,7 +305,8 @@ public class Plugin : BaseUnityPlugin
             // Logger.LogInfo("__0? " + SafeToString(__0));
             // Logger.LogInfo("type? " + SafeToString(__instance.GetType()));
             // var obj = __instance.gameObject;
-            // Logger.LogInfo("obj = " + SafeToString(obj));
+            // Logger.LogInfo("obj = " + SafeToString(__instance.gameObject));
+            // looking out for Wide_map__xxxx_{name}
             __instance.gameObject.AddComponent<OnClickInventoryItem>();
             // Logger.LogInfo("Added click component?");
         }
