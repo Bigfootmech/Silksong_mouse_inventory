@@ -45,6 +45,7 @@ public class Plugin : BaseUnityPlugin
         public void OnMouseUp()
         {
             // Logger.LogDebug("MouseUp"); // for implementing alternate mouseclick modes
+            CurrentPanesCursorControlFsm.SendEvent("UI CONFIRM RELEASED"); // temp fix?
         }
 
         public void OnMouseDown()
