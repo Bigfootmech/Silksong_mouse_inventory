@@ -43,8 +43,7 @@ public class Plugin : BaseUnityPlugin
     // public static PlayMakerFSM InvFsm = null; // Inv - Inventory Proxy
     // private static InventoryItemCollectableManager InvItemMgr;
     private static PlayMakerFSM MapZoomStateFsm = null;
-
-
+    private static GameMap ZoomedMapControl = null;
     private static DraggingAction MapDragging = new();
 
     
@@ -188,6 +187,7 @@ public class Plugin : BaseUnityPlugin
         public class DraggingAction
         {
             public bool IsDragging;
+            private Vector2 MouseLastPos;
 
             public void Update()
             {
@@ -220,6 +220,7 @@ public class Plugin : BaseUnityPlugin
             private void StartDragging()
             {
                 IsDragging = true;
+                MouseLastPos = GetLocalMousePos();
             }
 
             private void Release()
@@ -238,6 +239,19 @@ public class Plugin : BaseUnityPlugin
                 SetMapCoordsByMouse();
             }
 
+            private Vector2 GetLocalMousePos()
+            {
+                return HudCamera.ScreenToWorldPoint(Input.mousePosition);
+            }
+
+            private Vector2 GetMouseDragDelta()
+            {
+                Vector2 currMousePos = GetLocalMousePos();
+                Vector2 mouseDelta = currMousePos - MouseLastPos;
+                MouseLastPos = currMousePos;
+                return mouseDelta;
+            }
+
             private void SetMapCoordsByMouse()
             {
                 if(CurrentPaneType != InventoryPaneList.PaneTypes.Map ||
@@ -246,8 +260,11 @@ public class Plugin : BaseUnityPlugin
                     Release();
                     return;
                 }
+                
+                Vector2 mouseDelta = GetMouseDragDelta();
+                Vector2 mapCurrPos = ZoomedMapControl.transform.localPosition;
 
-                Logger.LogInfo("Dragging");
+                ZoomedMapControl.UpdateMapPosition(mapCurrPos + mouseDelta);
             }
         }
 
@@ -393,6 +410,18 @@ public class Plugin : BaseUnityPlugin
 	    }
     }
     
+			
+    [HarmonyPatch(typeof(GameMap), "Start")]
+    public class HookRealMapStart
+    {
+	    [HarmonyPostfix]
+	    static void Postfix(GameMap __instance
+		    // , ref AsyncOperation ___loadop
+		    )
+	    {
+            ZoomedMapControl = __instance;
+        }
+    }
 
     [HarmonyPatch(typeof(InventoryItemSelectable), "add_OnSelected")]
     public class TryOnSelected
