@@ -16,6 +16,8 @@ Currently available: <br />
 - Click Tabs in top right (v0.0.3)
 - Mouse-over, and clicking most inventory/crest/quests/hunter's journal elements (v0.0.4)
 - Map section clicking (jank), and returning (right click) (v0.1.0)
+- Map zoom in/out with mousewheel (v0.1.1)
+- Map click-n-drag (v0.1.2)
 
 <h1>Links:</h1>
 GitHub: <a href = "https://github.com/Bigfootmech/Silksong_mouse_inventory">https://github.com/Bigfootmech/Silksong_mouse_inventory</a> <br />
