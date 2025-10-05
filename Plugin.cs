@@ -288,6 +288,28 @@ public class Plugin : BaseUnityPlugin
                 Logger.LogError("Failed attaching onclick to missed inv items");
                 Logger.LogError(e.Message);
             }
+            
+            try {
+                UnityEngine.Transform mapTfm = inventoryTfm.Find("Map");
+                UnityEngine.Transform overmapHolderTfm = mapTfm.Find("World Map").Find("Map Offset");
+                UnityEngine.Transform overmapTfm = overmapHolderTfm.GetChild(0); // we hope.
+                foreach(Transform overmapSegments in overmapTfm) {
+                    var go = overmapSegments.gameObject;
+                    // Logger.LogInfo(go.name);
+                    if(overmapSegments.gameObject.name.StartsWith("Wide_map_"))
+                    {
+                        // Logger.LogInfo("Accepted");
+                        BoxCollider2D addedColl = go.AddComponent<BoxCollider2D>();
+                        go.AddComponent<OnClickInventoryItem>();
+                    } else {
+                        // Logger.LogInfo("Rejected");
+                    }
+                    
+                }
+            } catch (Exception e) {
+                Logger.LogError("Failed attaching onclick to missed overmap items");
+                Logger.LogError(e.Message);
+            }
 	    }
     }
     
