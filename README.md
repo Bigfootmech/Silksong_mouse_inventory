@@ -12,9 +12,9 @@ So I've decided to release it bit-by-bit, as I work on it.
 hence, WORK-IN-PROGRSS (WIP) label
 
 Currently available: <br />
-- (0.0.1) Click Arrows at sides to switch tab/'pane'
-- (0.0.3) Click Tabs in top right
-- (0.0.4) Mouse-over, and clicking most inventory/crest/quests/hunter's journal elements
+- Click Arrows at sides to switch tab/'pane' (v0.0.1)
+- Click Tabs in top right (v0.0.3)
+- Mouse-over, and clicking most inventory/crest/quests/hunter's journal elements (v0.0.4) 
 
 <h1>Links:</h1>
 GitHub: <a href = "https://github.com/Bigfootmech/Silksong_mouse_inventory">https://github.com/Bigfootmech/Silksong_mouse_inventory</a> <br />
