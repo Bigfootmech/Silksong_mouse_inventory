@@ -166,6 +166,19 @@ public class Plugin : BaseUnityPlugin
         }
     }
 
+    public class TestClicker : OnClickClass
+    {
+        protected override void ClickFunction()
+        {
+            Logger.LogInfo("Click Test");
+        }
+        
+        protected override void MouseOverFunction()
+        {
+            Logger.LogInfo("Mouseover Test");
+        }
+    }
+
     private static string SafeToString(System.Object ob) // helper
     {
         return ob?.ToString() ?? "null";
@@ -333,7 +346,7 @@ public class Plugin : BaseUnityPlugin
             // Logger.LogInfo("Added click component?");
         }
     }
-
+        
     [HarmonyPatch(typeof(InputHandler), "SetCursorVisible")]
     public class OverrideCursorVisible
     {
@@ -385,11 +398,10 @@ public class Plugin : BaseUnityPlugin
 
             try { // if we error, please tell us why :/
 
-                // Which pane? (get FSM)
+                // if this isn't found, we're already doomed.
                 PlayMakerFSM currentPaneFsm = GetCursorControlFSM(__instance); // note: if retrieval is expensive (haven't checked), it's possible to do at setup instead, and map with ___paneControl 
                 CurrentPaneObject = __instance.gameObject;
-                // if this isn't found, we're already doomed.
-                
+
                 SwitchedPanesThisFrame = false;
                 if(CurrentPanesCursorControlFsm != currentPaneFsm)
                 {
@@ -397,11 +409,33 @@ public class Plugin : BaseUnityPlugin
                     CurrentPanesCursorControlFsm = currentPaneFsm;
                 }
                 
-
+                if (Input.GetMouseButtonDown(1)) // right clicked
+                {
+                    HandleRightClick(___paneControl);
+                }
 
             } catch (Exception e) {
                 Logger.LogError("Error: " + e.Message);
             }
+        }
+
+        private static void HandleRightClick(InventoryPaneList.PaneTypes paneControl)
+        {
+            if(paneControl != InventoryPaneList.PaneTypes.Map)
+            {
+                TabbingControlFSM.SendEvent("BACK"); // doesn't work zoomed in... but otherwise ok
+                return;
+            }
+
+            var fsm = CurrentPaneObject.LocateMyFSM("UI Control");
+
+            if(fsm.ActiveStateName == "Wide Map")
+            {
+                TabbingControlFSM.SendEvent("BACK"); // normal window = just back
+                return;
+            }
+            
+            fsm.SendEvent("UI CANCEL");
         }
     }
 
