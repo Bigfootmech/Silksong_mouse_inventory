@@ -14,6 +14,11 @@ public class Plugin : BaseUnityPlugin
     internal static new ManualLogSource Logger; // propagate to other static methods here
 	private readonly Harmony harmony = new Harmony(modGUID);
     
+    private const string CURSOR_CONTROL_FSM_NAME = "Inventory Proxy";
+    private const string MAP_STATE_OVERMAP = "Wide Map";
+    private const string MAP_STATE_ZOOMED = "Zoomed In";
+    private const string MAP_STATE_MARKERING = "Marker Select Menu";
+    
     private static bool SwitchedPanesThisFrame = false;
     private static bool IsInventoryOpen() 
     {
@@ -21,13 +26,24 @@ public class Plugin : BaseUnityPlugin
         return TabbingControlFSM.ActiveStateName != "Closed"; 
     }
 
+    // Camera
     private static UnityEngine.Camera HudCamera = null;
+    // Inventory Overall
     private static PlayMakerFSM TabbingControlFSM = null; // Inventory - Inventory Control
-    private static PlayMakerFSM CurrentPanesCursorControlFsm = null; // {X_pane} - Inventory Proxy
-    private static GameObject CurrentPaneObject = null;
-    // public static PlayMakerFSM InvFsm = null; // Inv - Inventory Proxy
     private static InventoryPaneList PaneList = null;
+    // Tab/Pane
+    private static InventoryPaneList.PaneTypes CurrentPaneType = InventoryPaneList.PaneTypes.None;
+    private static GameObject CurrentPaneObject = null;
+    // Inv - Inventory Proxy
+    // Journal - Inventory Proxy
+    // Map - Inventory Proxy
+    // Tools - Inventory Proxy
+    // Quests - Inventory Proxy
+    private static PlayMakerFSM CurrentPanesCursorControlFsm = null; // {X_pane} - Inventory Proxy
+    // public static PlayMakerFSM InvFsm = null; // Inv - Inventory Proxy
     // private static InventoryItemCollectableManager InvItemMgr;
+    private static PlayMakerFSM MapZoomStateFsm = null;
+
 
     private static DraggingAction MapDragging = new();
 
@@ -213,11 +229,24 @@ public class Plugin : BaseUnityPlugin
 
             private void DoDragAction()
             {
+                if(!IsInventoryOpen()) 
+                {
+                    Release();
+                    return;
+                }
+
                 SetMapCoordsByMouse();
             }
 
             private void SetMapCoordsByMouse()
             {
+                if(CurrentPaneType != InventoryPaneList.PaneTypes.Map ||
+                    MapZoomStateFsm.ActiveStateName != MAP_STATE_ZOOMED)
+                {
+                    Release();
+                    return;
+                }
+
                 Logger.LogInfo("Dragging");
             }
         }
@@ -253,39 +282,6 @@ public class Plugin : BaseUnityPlugin
 		TabbingControlFSM.SendEvent("MOVE PANE TO");
     }
     
-
-    private static PlayMakerFSM GetCursorControlFSM(InventoryPaneInput ipi)
-    {
-        return GetCursorControlFSM(ipi.transform);
-    }
-    private static PlayMakerFSM GetCursorControlFSM(UnityEngine.GameObject obj)
-    {
-        return GetCursorControlFSM(obj.transform);
-    }
-
-    // Inv - Inventory Proxy
-    // Journal - Inventory Proxy
-    // Map - Inventory Proxy
-    // Tools - Inventory Proxy
-    // Quests - Inventory Proxy
-    private static PlayMakerFSM GetCursorControlFSM(UnityEngine.Transform tfm)
-    {
-        PlayMakerFSM[] listFsms = tfm.GetComponents<PlayMakerFSM>();
-
-        foreach(PlayMakerFSM fsm in listFsms)
-        {
-            // Logger.LogDebug(fsm.FsmName);
-            // if(fsm.FsmName.Contains("Proxy"))
-            if(fsm.FsmName == "Inventory Proxy")
-            {
-                // Logger.LogDebug("Got Proxy");
-                return fsm;
-            }
-        }
-
-        return null;
-    }
-
     [HarmonyPatch(typeof(InventoryPaneList), "Start")]
     public class AfterInventoryIsCreated_Setup
     {
@@ -364,6 +360,15 @@ public class Plugin : BaseUnityPlugin
                 Logger.LogError(e.Message);
             }
             
+            
+            try {
+                UnityEngine.Transform mapTfm = inventoryTfm.Find("Map");
+                MapZoomStateFsm = mapTfm.gameObject.LocateMyFSM("UI Control");
+            } catch (Exception e) {
+                Logger.LogError("Failed setting up map zoom control.");
+                Logger.LogError(e.Message);
+            }
+
             try {
                 UnityEngine.Transform mapTfm = inventoryTfm.Find("Map");
                 UnityEngine.Transform overmapHolderTfm = mapTfm.Find("World Map").Find("Map Offset");
@@ -459,43 +464,41 @@ public class Plugin : BaseUnityPlugin
             // Inventory is open (polling)
 
             try { // if we error, please tell us why :/
-
-                // if this isn't found, we're already doomed.
-                PlayMakerFSM currentPaneFsm = GetCursorControlFSM(__instance); // note: if retrieval is expensive (haven't checked), it's possible to do at setup instead, and map with ___paneControl 
-                CurrentPaneObject = __instance.gameObject;
-
+                
                 SwitchedPanesThisFrame = false;
-                if(CurrentPanesCursorControlFsm != currentPaneFsm)
+                if(CurrentPaneType != ___paneControl)
                 {
                     SwitchedPanesThisFrame = true; // duration = ~1 frame
-                    CurrentPanesCursorControlFsm = currentPaneFsm;
+                    CurrentPaneType = ___paneControl;
+                    CurrentPaneObject = __instance.gameObject;
+                    // if this isn't found, we're already doomed.
+                    CurrentPanesCursorControlFsm = CurrentPaneObject.LocateMyFSM(CURSOR_CONTROL_FSM_NAME); // also possible to load these at start, and retrieve with paneControl
                 }
                 
                 if (Input.GetMouseButtonDown(1)) // right clicked
                 {
-                    HandleRightClick(___paneControl);
+                    InventoryBack();
                 }
 
                 
-                if(___paneControl == InventoryPaneList.PaneTypes.Map)
+                if(CurrentPaneType == InventoryPaneList.PaneTypes.Map)
                 {
-
-                    var mapZoomStateFsm = CurrentPaneObject.LocateMyFSM("UI Control");
-
-                    if(mapZoomStateFsm.ActiveStateName == "Wide Map")
+                    if(MapZoomStateFsm.ActiveStateName == MAP_STATE_OVERMAP)
                     {
                         if(Input.GetAxisRaw("Mouse ScrollWheel") > 0) // scroll up
                         {
                             CurrentPanesCursorControlFsm.SendEvent("UI CONFIRM"); // "zoom in"
                         }
-                    } else {
+                    } 
+                    if(MapZoomStateFsm.ActiveStateName == MAP_STATE_ZOOMED) 
+                    {
                         if(Input.GetAxisRaw("Mouse ScrollWheel") < 0) // scroll down
                         {
                             MapBack();
                         }
                     }
 
-                    if(mapZoomStateFsm.ActiveStateName == "Zoomed In")
+                    if(MapZoomStateFsm.ActiveStateName == MAP_STATE_ZOOMED)
                     {
                         MapDragging.Update();
 
@@ -503,7 +506,7 @@ public class Plugin : BaseUnityPlugin
                         // we want dragging
                     }
 
-                    if(mapZoomStateFsm.ActiveStateName == "Marker Select Menu")
+                    if(MapZoomStateFsm.ActiveStateName == MAP_STATE_MARKERING)
                     {
                         // we want to replace cursor with selector
                     }
@@ -516,9 +519,9 @@ public class Plugin : BaseUnityPlugin
             }
         }
 
-        private static void HandleRightClick(InventoryPaneList.PaneTypes paneControl)
+        private static void InventoryBack()
         {
-            if(paneControl != InventoryPaneList.PaneTypes.Map)
+            if(CurrentPaneType != InventoryPaneList.PaneTypes.Map)
             {
                 TabbingControlFSM.SendEvent("BACK"); // doesn't work zoomed in... but otherwise ok
                 return;
@@ -531,7 +534,7 @@ public class Plugin : BaseUnityPlugin
         {
             var mapZoomStateFsm = CurrentPaneObject.LocateMyFSM("UI Control");
 
-            if(mapZoomStateFsm.ActiveStateName == "Wide Map")
+            if(mapZoomStateFsm.ActiveStateName == MAP_STATE_OVERMAP)
             {
                 TabbingControlFSM.SendEvent("BACK"); // normal window = just back
                 return;
