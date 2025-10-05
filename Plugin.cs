@@ -3,6 +3,7 @@ using BepInEx.Logging;
 using HarmonyLib;
 using System;
 using UnityEngine;
+using static inventory_mouse_use.Plugin.OnClickInventoryItem;
 
 namespace inventory_mouse_use;
 
@@ -27,6 +28,8 @@ public class Plugin : BaseUnityPlugin
     // public static PlayMakerFSM InvFsm = null; // Inv - Inventory Proxy
     private static InventoryPaneList PaneList = null;
     // private static InventoryItemCollectableManager InvItemMgr;
+
+    private static DraggingAction MapDragging = new();
 
     
 
@@ -59,6 +62,7 @@ public class Plugin : BaseUnityPlugin
         {
             // every frame
             if(!IsInventoryOpen()) return;
+            WhileMouseOvered();
             if(MouseAlreadyIn && !SwitchedPanesThisFrame) return;
             // only once, OR if just switched frames
             // Issue: Cursor ZIPS to mouse-over after switching -- any way to just start on element?
@@ -83,6 +87,11 @@ public class Plugin : BaseUnityPlugin
         {
             // Logger.LogDebug("Targeting wrong method");
             CurrentPanesCursorControlFsm.SetState("Accept Input"); // reset state if was at arrow
+        }
+
+        protected virtual void WhileMouseOvered()
+        {
+            // Logger.LogDebug("do this every frame");
         }
     }
 
@@ -158,6 +167,59 @@ public class Plugin : BaseUnityPlugin
             InvItemMgr.SetSelected(ownSelectable,null);
 
             base.MouseOverFunction();
+        }
+
+        public class DraggingAction
+        {
+            public bool IsDragging;
+
+            public void Update()
+            {
+                // Logger.LogInfo("Is being processed");
+
+                if(IsDragging)
+                {
+                    DoDragAction();
+                }
+                
+                if (Input.GetMouseButtonDown(0)) // leftclick just pressed
+                {
+                    // Logger.LogInfo("MouseDown");
+                    if(!IsDragging)
+                    {
+                        // StartDragTimer();
+                        StartDragging();
+                    } 
+                } 
+                
+                if (Input.GetMouseButtonUp(0)){ // left released
+                    if(IsDragging) // and WAS dragging
+                    {
+                        Release();
+                    }
+                }
+
+            }
+
+            private void StartDragging()
+            {
+                IsDragging = true;
+            }
+
+            private void Release()
+            {
+                IsDragging = false;
+            }
+
+            private void DoDragAction()
+            {
+                SetMapCoordsByMouse();
+            }
+
+            private void SetMapCoordsByMouse()
+            {
+                Logger.LogInfo("Dragging");
+            }
         }
 
         private InventoryItemSelectable GetOwnSelectable()
@@ -414,6 +476,41 @@ public class Plugin : BaseUnityPlugin
                     HandleRightClick(___paneControl);
                 }
 
+                
+                if(___paneControl == InventoryPaneList.PaneTypes.Map)
+                {
+
+                    var mapZoomStateFsm = CurrentPaneObject.LocateMyFSM("UI Control");
+
+                    if(mapZoomStateFsm.ActiveStateName == "Wide Map")
+                    {
+                        if(Input.GetAxisRaw("Mouse ScrollWheel") > 0) // scroll up
+                        {
+                            CurrentPanesCursorControlFsm.SendEvent("UI CONFIRM"); // "zoom in"
+                        }
+                    } else {
+                        if(Input.GetAxisRaw("Mouse ScrollWheel") < 0) // scroll down
+                        {
+                            MapBack();
+                        }
+                    }
+
+                    if(mapZoomStateFsm.ActiveStateName == "Zoomed In")
+                    {
+                        MapDragging.Update();
+
+
+                        // we want dragging
+                    }
+
+                    if(mapZoomStateFsm.ActiveStateName == "Marker Select Menu")
+                    {
+                        // we want to replace cursor with selector
+                    }
+                }
+
+
+
             } catch (Exception e) {
                 Logger.LogError("Error: " + e.Message);
             }
@@ -427,15 +524,20 @@ public class Plugin : BaseUnityPlugin
                 return;
             }
 
-            var fsm = CurrentPaneObject.LocateMyFSM("UI Control");
+            MapBack();
+        }
 
-            if(fsm.ActiveStateName == "Wide Map")
+        private static void MapBack()
+        {
+            var mapZoomStateFsm = CurrentPaneObject.LocateMyFSM("UI Control");
+
+            if(mapZoomStateFsm.ActiveStateName == "Wide Map")
             {
                 TabbingControlFSM.SendEvent("BACK"); // normal window = just back
                 return;
             }
             
-            fsm.SendEvent("UI CANCEL");
+            mapZoomStateFsm.SendEvent("UI CANCEL");
         }
     }
 
