@@ -24,7 +24,12 @@ public class Plugin : BaseUnityPlugin
     private static bool IsInventoryOpen() 
     {
         if(TabbingControlFSM == null) return false;
-        return TabbingControlFSM.ActiveStateName != "Closed"; 
+
+        var state = TabbingControlFSM.ActiveStateName;
+        
+        if(state == "Closed" || state == "Init") return false;
+
+        return true; 
     }
     private static bool Scrolling = false;
     private const int FRAMES_TO_BLOCK_MOUSEOVER_WHILE_SCROLLING = 100; // magic number
@@ -151,7 +156,7 @@ public class Plugin : BaseUnityPlugin
 
         protected virtual void MouseOverFunction()
         {
-            // Logger.LogDebug("Targeting wrong method");
+            // Logger.LogInfo("reset state? on " + SafeToString(gameObject.name));
             CurrentPanesCursorControlFsm.SetState("Accept Input"); // reset state if was at arrow
         }
 
@@ -174,6 +179,7 @@ public class Plugin : BaseUnityPlugin
         
         protected override void MouseOverFunction()
         {
+            // Logger.LogInfo("reset state? on " + SafeToString(gameObject.name));
             // Logger.LogDebug("Targeting correct method");
             CurrentPanesCursorControlFsm.SetState(stateName);
         }
@@ -189,6 +195,7 @@ public class Plugin : BaseUnityPlugin
         
         protected override void MouseOverFunction()
         {
+            // Logger.LogInfo("mouseover on " + SafeToString(gameObject.name));
             InventoryItemManager InvItemMgr = CurrentPaneObject.GetComponent<InventoryItemManager>();
             InvItemMgr.SetSelected(this.gameObject);
         }
@@ -217,6 +224,13 @@ public class Plugin : BaseUnityPlugin
         
         protected override void MouseOverFunction()
         {
+            // can fail to find current pane early
+            // we could do a whole setup, categorizing each thing to their panes, 
+            // and getting the right ones...
+            // Or we could just wait until the pane is grabbed
+            if(CurrentPaneObject == null) return;
+            // so this is more-or-less just an error-squelch.
+
             var ownSelectable = GetOwnSelectable();
 
             // Logger.LogInfo("Mouseover inv item");
@@ -224,12 +238,9 @@ public class Plugin : BaseUnityPlugin
             {
                 Logger.LogError("selectable is null for " + this.gameObject.name);
                 return;
-
             }
 
-            // again, only visible :/ (not description update)
             InventoryItemManager InvItemMgr = CurrentPaneObject.GetComponent<InventoryItemManager>();
-            // InvItemMgr.SetSelected(this.gameObject);
             InvItemMgr.SetSelected(ownSelectable,null);
 
             base.MouseOverFunction();
