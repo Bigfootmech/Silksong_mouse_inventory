@@ -19,6 +19,7 @@ Currently available: <br />
 - Map zoom in/out with mousewheel (v0.1.1)
 - Map click-n-drag (v0.1.2)
 - Mouse-over scroll-arrows to scroll (inv, crests, quests, hunt journal) (v0.1.3)
+- Mouse-scroll while hovering arrow-scroll sections (janky) (v0.1.4)
 
 <h1>Links:</h1>
 GitHub: <a href = "https://github.com/Bigfootmech/Silksong_mouse_inventory">https://github.com/Bigfootmech/Silksong_mouse_inventory</a> <br />
