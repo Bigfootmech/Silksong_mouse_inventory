@@ -2,6 +2,7 @@
 using BepInEx.Logging;
 using HarmonyLib;
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using static inventory_mouse_use.Plugin.OnClickInventoryItem;
 
@@ -28,6 +29,11 @@ public class Plugin : BaseUnityPlugin
 
     // Camera
     private static UnityEngine.Camera HudCamera = null;
+    public static Vector2 GetLocalMousePos()
+    {
+        return HudCamera.ScreenToWorldPoint(Input.mousePosition);
+    }
+
     // Inventory Overall
     private static PlayMakerFSM TabbingControlFSM = null; // Inventory - Inventory Control
     private static InventoryPaneList PaneList = null;
@@ -45,7 +51,12 @@ public class Plugin : BaseUnityPlugin
     private static PlayMakerFSM MapZoomStateFsm = null;
     private static GameMap ZoomedMapControl = null;
     private static DraggingAction MapDragging = new();
-
+    
+    private static Dictionary<InventoryPaneList.PaneTypes, ScrollHover> ScrollHoverSet = new();
+    private static ScrollHover GetScrollHoverForPane(InventoryPaneList.PaneTypes currentPaneType)
+    {
+        return ScrollHoverSet.GetValueSafe(currentPaneType);
+    }
     
 
     private void Awake() // Mod startup
@@ -239,11 +250,6 @@ public class Plugin : BaseUnityPlugin
                 SetMapCoordsByMouse();
             }
 
-            private Vector2 GetLocalMousePos()
-            {
-                return HudCamera.ScreenToWorldPoint(Input.mousePosition);
-            }
-
             private Vector2 GetMouseDragDelta()
             {
                 Vector2 currMousePos = GetLocalMousePos();
@@ -278,15 +284,15 @@ public class Plugin : BaseUnityPlugin
     {
         internal enum Dir {Up, Down };
 
-        private const float SPEED = 0.2f;
+        private const float SPEED = 0.2f; // MAGIC NUMBER (hover scroll speed)
 
-        public ScrollView ControllerScript;
+        public ScrollView ScrollControllerScript;
         private Vector3 TravelVector = new(0,SPEED,0);
 
         protected override void WhileMouseOvered()
         {
             // var delta = Time.deltaTime; // always 0, not in use?
-            ControllerScript.transform.localPosition += TravelVector;
+            ScrollControllerScript.transform.localPosition += TravelVector;
         }
 
         internal void SetDirection(Dir direction)
@@ -302,17 +308,54 @@ public class Plugin : BaseUnityPlugin
     {
         protected override void ClickFunction()
         {
-            Logger.LogInfo("Click Test");
+            Logger.LogInfo("Click Test. " + SafeToString(gameObject.name));
         }
         
         protected override void MouseOverFunction()
         {
-            Logger.LogInfo("Mouseover Test");
+            Logger.LogInfo("Mouseover Test." + SafeToString(gameObject.name));
         }
 
         protected override void WhileMouseOvered()
         {
-            Logger.LogInfo("do this every frame");
+            Logger.LogInfo("do this every frame." + SafeToString(gameObject.name));
+        }
+    }
+
+    public class ScrollHover : MonoBehaviour
+    {
+        private const float SCROLL_WHEEL_SPEED = 8.0f; // MAGIC NUMBER (wheel scroll speed)
+
+        // public Bounds Bounds;
+        public InventoryPaneList.PaneTypes MyPane;
+        public ScrollView ScrollControllerScript;
+
+        public bool CheckMouseOver()
+        {
+            Vector2 screenLoc = transform.position;
+            var mouseOffset = GetLocalMousePos() - screenLoc;
+
+            return ScrollControllerScript.contentBounds.Contains(mouseOffset);
+        }
+
+        public void Update()
+        {
+            // Logger.LogInfo("Update triggered: " + SafeToString(gameObject.name));
+            if(!IsInventoryOpen() || CurrentPaneType != MyPane) return;
+            // Logger.LogInfo("Correct Pane");
+            if(!CheckMouseOver()) return;
+            // inventory open, to the correct pane, and moused-over
+
+            Scroll();
+            // Logger.LogInfo("Mousing over a scroll area! " + SafeToString(gameObject.name));
+        }
+
+        private void Scroll()
+        {
+            float mouseWheelSpeed = Input.GetAxisRaw("Mouse ScrollWheel");
+            float modified = mouseWheelSpeed * SCROLL_WHEEL_SPEED;
+
+            ScrollControllerScript.transform.localPosition -= new Vector3(0,modified,0);
         }
     }
 
@@ -450,10 +493,36 @@ public class Plugin : BaseUnityPlugin
             var hoverUp = __instance.upArrow.transform.parent.gameObject.AddComponent<ScrollArrowHover>();
             var hoverDown = __instance.downArrow.transform.parent.gameObject.AddComponent<ScrollArrowHover>();
             
-            hoverUp.ControllerScript = __instance;
-            hoverDown.ControllerScript = __instance;
+            hoverUp.ScrollControllerScript = __instance;
+            hoverDown.ScrollControllerScript = __instance;
             hoverUp.SetDirection(ScrollArrowHover.Dir.Up);
             hoverDown.SetDirection(ScrollArrowHover.Dir.Down);
+            
+            var hoverComp = __instance.gameObject.AddComponent<ScrollHover>();
+            hoverComp.ScrollControllerScript = __instance;
+
+            var paneType = FindPaneTypeForThis(__instance);
+            hoverComp.MyPane = paneType;
+            RegisterScroller(paneType, hoverComp);
+
+        }
+
+        private static void RegisterScroller(InventoryPaneList.PaneTypes paneType, ScrollHover testH)
+        {
+            if(paneType == InventoryPaneList.PaneTypes.None) return;
+            ScrollHoverSet.Add(paneType, testH);
+        }
+
+        private static InventoryPaneList.PaneTypes FindPaneTypeForThis(ScrollView instance)
+        {
+            var objName = instance.gameObject.name;
+            // Logger.LogInfo("obj name " + SafeToString(objName));
+            // this can be a map, but honestly, this is more readable imo.
+            if(objName == "Equipment") return InventoryPaneList.PaneTypes.Inv;
+            if(objName == "Tool List") return InventoryPaneList.PaneTypes.Tools;
+            if(objName == "Quest List") return InventoryPaneList.PaneTypes.Quests;
+            if(objName == "Enemy List") return InventoryPaneList.PaneTypes.Journal;
+            return InventoryPaneList.PaneTypes.None;
         }
     }
             
@@ -555,6 +624,8 @@ public class Plugin : BaseUnityPlugin
                     InventoryBack();
                 }
 
+                ScrollHover scrollHover = GetScrollHoverForPane(CurrentPaneType);
+                if(scrollHover != null) scrollHover.Update();
                 
                 if(CurrentPaneType == InventoryPaneList.PaneTypes.Map)
                 {
