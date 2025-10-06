@@ -26,6 +26,43 @@ public class Plugin : BaseUnityPlugin
         if(TabbingControlFSM == null) return false;
         return TabbingControlFSM.ActiveStateName != "Closed"; 
     }
+    private static bool Scrolling = false;
+    private const int FRAMES_TO_BLOCK_MOUSEOVER_WHILE_SCROLLING = 100; // magic number
+    private static int ScrollSmoothCountdown = 0;
+    // private static int ScrollSmoothCountUp = 0;
+    private static bool IsScrolling()
+    {
+        return Scrolling || Input.GetAxisRaw("Mouse ScrollWheel") != 0;
+    }
+    private static void SetScrolling(bool setVal, bool instant = false)
+    {
+        if(setVal) // set scroll on
+        {
+            Scrolling = true;
+            // ScrollSmoothCountUp = 0;
+            ScrollSmoothCountdown = FRAMES_TO_BLOCK_MOUSEOVER_WHILE_SCROLLING;
+            return;
+        }
+
+        // countdown adjust
+        if(instant)
+        {
+            ScrollSmoothCountdown = 0;
+        } else {
+            if(ScrollSmoothCountdown > 0)
+            {
+                ScrollSmoothCountdown--;
+            } 
+        }
+        
+        // if end, set scroll off
+        if(ScrollSmoothCountdown <= 0) 
+        {
+            // ScrollSmoothCountUp = 0;
+            Scrolling = false;
+        } 
+    }
+
 
     // Camera
     private static UnityEngine.Camera HudCamera = null;
@@ -81,13 +118,16 @@ public class Plugin : BaseUnityPlugin
         {
             if(!IsInventoryOpen()) return;
             // Logger.LogDebug("I was clicked");
+            if(IsScrolling()) return; // disable clicking while wrong element set
             ClickFunction();
         }
 
         public void OnMouseOver() // every frame
         {
             // every frame
-            if(!IsInventoryOpen()) return;
+            if(!IsInventoryOpen()) return; // if not in inventory, ignore button contact
+            
+            if(IsScrolling()) return; // disable mouse-over while scrolling
             WhileMouseOvered();
             if(MouseAlreadyIn && !SwitchedPanesThisFrame) return;
             // only once, OR if just switched frames
@@ -343,7 +383,11 @@ public class Plugin : BaseUnityPlugin
             // Logger.LogInfo("Update triggered: " + SafeToString(gameObject.name));
             if(!IsInventoryOpen() || CurrentPaneType != MyPane) return;
             // Logger.LogInfo("Correct Pane");
-            if(!CheckMouseOver()) return;
+            if(!CheckMouseOver()) 
+            {
+                SetScrolling(false, true);
+                return;
+            } 
             // inventory open, to the correct pane, and moused-over
 
             Scroll();
@@ -353,9 +397,16 @@ public class Plugin : BaseUnityPlugin
         private void Scroll()
         {
             float mouseWheelSpeed = Input.GetAxisRaw("Mouse ScrollWheel");
-            float modified = mouseWheelSpeed * SCROLL_WHEEL_SPEED;
 
-            ScrollControllerScript.transform.localPosition -= new Vector3(0,modified,0);
+            if(mouseWheelSpeed != 0)
+            {
+                SetScrolling(true);
+                float modified = mouseWheelSpeed * SCROLL_WHEEL_SPEED;
+
+                ScrollControllerScript.transform.localPosition -= new Vector3(0,modified,0);
+            } else {
+                SetScrolling(false);
+            }
         }
     }
 
@@ -609,6 +660,8 @@ public class Plugin : BaseUnityPlugin
 
             try { // if we error, please tell us why :/
                 
+                // Logger.LogInfo("Scrolling = " + SafeToString(Scrolling) + ", cd = " + SafeToString(ScrollSmoothCountdown) + ", cu = " + SafeToString(ScrollSmoothCountUp++));
+
                 SwitchedPanesThisFrame = false;
                 if(CurrentPaneType != ___paneControl)
                 {
