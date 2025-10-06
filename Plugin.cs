@@ -106,7 +106,7 @@ public class Plugin : BaseUnityPlugin
 
         protected virtual void WhileMouseOvered()
         {
-            // Logger.LogDebug("do this every frame");
+            // Logger.LogInfo("do this every frame, EVERY item");
         }
     }
 
@@ -274,6 +274,30 @@ public class Plugin : BaseUnityPlugin
         }
     }
 
+    public class ScrollArrowHover : OnClickClass
+    {
+        internal enum Dir {Up, Down };
+
+        private const float SPEED = 0.2f;
+
+        public ScrollView ControllerScript;
+        private Vector3 TravelVector = new(0,SPEED,0);
+
+        protected override void WhileMouseOvered()
+        {
+            // var delta = Time.deltaTime; // always 0, not in use?
+            ControllerScript.transform.localPosition += TravelVector;
+        }
+
+        internal void SetDirection(Dir direction)
+        {
+            if(direction == Dir.Down)
+                TravelVector.y = SPEED;
+            else
+                TravelVector.y = -SPEED;
+        }
+    }
+
     public class TestClicker : OnClickClass
     {
         protected override void ClickFunction()
@@ -284,6 +308,11 @@ public class Plugin : BaseUnityPlugin
         protected override void MouseOverFunction()
         {
             Logger.LogInfo("Mouseover Test");
+        }
+
+        protected override void WhileMouseOvered()
+        {
+            Logger.LogInfo("do this every frame");
         }
     }
 
@@ -410,7 +439,24 @@ public class Plugin : BaseUnityPlugin
 	    }
     }
     
-			
+    [HarmonyPatch(typeof(ScrollView), "Start")]
+    public class GetAllScrollViews
+    {
+	    [HarmonyPostfix]
+	    static void Postfix(ScrollView __instance
+		    // , ref AsyncOperation ___loadop
+		    )
+	    {
+            var hoverUp = __instance.upArrow.transform.parent.gameObject.AddComponent<ScrollArrowHover>();
+            var hoverDown = __instance.downArrow.transform.parent.gameObject.AddComponent<ScrollArrowHover>();
+            
+            hoverUp.ControllerScript = __instance;
+            hoverDown.ControllerScript = __instance;
+            hoverUp.SetDirection(ScrollArrowHover.Dir.Up);
+            hoverDown.SetDirection(ScrollArrowHover.Dir.Down);
+        }
+    }
+            
     [HarmonyPatch(typeof(GameMap), "Start")]
     public class HookRealMapStart
     {
