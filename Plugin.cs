@@ -3,6 +3,7 @@ using BepInEx.Logging;
 using HarmonyLib;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using static inventory_mouse_use.Plugin.OnClickInventoryItem;
 
@@ -34,6 +35,9 @@ public class Plugin : BaseUnityPlugin
     private static bool Scrolling = false;
     private const int FRAMES_TO_BLOCK_MOUSEOVER_WHILE_SCROLLING = 100; // magic number
     private static int ScrollSmoothCountdown = 0;
+    private static float MAGIC_GAME_PIN_COLLIDER_DISTANCE = 0.57f;
+    private static float PIN_MAP_PAN_SPEED = 3f;
+
     // private static int ScrollSmoothCountUp = 0;
     private static bool IsScrolling()
     {
@@ -100,7 +104,6 @@ public class Plugin : BaseUnityPlugin
         return ScrollHoverSet.GetValueSafe(currentPaneType);
     }
     
-
     private void Awake() // Mod startup
     {
         Logger = base.Logger;
@@ -283,6 +286,11 @@ public class Plugin : BaseUnityPlugin
             {
                 IsDragging = true;
                 MouseLastPos = GetLocalMousePos();
+            }
+
+            public void Stop()
+            {
+                Release();
             }
 
             private void Release()
@@ -637,7 +645,7 @@ public class Plugin : BaseUnityPlugin
     }
 
     [HarmonyPatch(typeof(InputHandler), "Update")]
-    public class testing
+    public class DisableAttackForMouseClickJank
     {
         [HarmonyPrefix]
         static void Prefix(InputHandler __instance)
@@ -671,6 +679,7 @@ public class Plugin : BaseUnityPlugin
 
             try { // if we error, please tell us why :/
                 
+
                 // Logger.LogInfo("Scrolling = " + SafeToString(Scrolling) + ", cd = " + SafeToString(ScrollSmoothCountdown) + ", cu = " + SafeToString(ScrollSmoothCountUp++));
 
                 SwitchedPanesThisFrame = false;
@@ -699,6 +708,8 @@ public class Plugin : BaseUnityPlugin
                         {
                             CurrentPanesCursorControlFsm.SendEvent("UI CONFIRM"); // "zoom in"
                         }
+
+                        MapDragging.Stop();
                     } 
                     if(MapZoomStateFsm.ActiveStateName == MAP_STATE_ZOOMED) 
                     {
@@ -706,10 +717,7 @@ public class Plugin : BaseUnityPlugin
                         {
                             MapBack();
                         }
-                    }
 
-                    if(MapZoomStateFsm.ActiveStateName == MAP_STATE_ZOOMED)
-                    {
                         MapDragging.Update();
 
 
@@ -718,11 +726,10 @@ public class Plugin : BaseUnityPlugin
 
                     if(MapZoomStateFsm.ActiveStateName == MAP_STATE_MARKERING)
                     {
+                        MapDragging.Stop();
                         // we want to replace cursor with selector
                     }
                 }
-
-
 
             } catch (Exception e) {
                 Logger.LogError("Error: " + e.Message);
@@ -751,6 +758,207 @@ public class Plugin : BaseUnityPlugin
             }
             
             mapZoomStateFsm.SendEvent("UI CANCEL");
+        }
+    }
+
+
+
+    
+    [HarmonyPatch(typeof(MapMarkerMenu), "Update")]
+    // [HarmonyPatch(typeof(MapMarkerMenu), "PanMap")]
+    public class PinsCursorMouseControl
+    {
+        // [HarmonyPrefix] 
+        // static void Prefix(MapMarkerMenu __instance
+        [HarmonyPostfix]
+        static void Postfix(MapMarkerMenu __instance
+		    // , bool __result
+            , ref GameObject ___placementCursor
+            // , ref bool ___collidingWithMarker
+            // , ref float ___placementCursorMinX
+            // , ref float ___placementCursorMaxX
+            // , ref float ___placementCursorMinY
+            // , ref float ___placementCursorMaxY
+            , ref List<GameObject> ___collidingMarkers
+            , ref GameMap ___gameMap
+            , ref GameObject ___gameMapObject
+            , ref bool ___inPlacementMode
+            , ref float ___placementTimer
+            , ref float ___panSpeed
+            )
+        {
+            if(!___inPlacementMode) return;
+            // Logger.LogInfo("time = " + SafeToString(Time.unscaledDeltaTime));
+
+            var isPanning = false;
+            var mousePosLimited = GetLocalMousePos();
+            
+            // Logger.LogInfo("mous = " + SafeToString(mousePos));
+            // Logger.LogInfo("marker bounds = " + SafeToString(___gameMap.MapMarkerBounds));
+            // Logger.LogInfo("in = " + SafeToString(___gameMap.MapMarkerBounds.Contains(mousePos)));
+            
+            // var bounds = ___gameMap.MapMarkerBounds;
+            var bounds = ___gameMap.mapMarkerScrollArea; // "correct"
+            
+            if(isPanning = IsMousePastEdge(bounds, mousePosLimited)) {
+
+                Vector3 panVec = GetPanVecAndConstrainMouse(ref mousePosLimited, 
+                    bounds, ___panSpeed,___placementTimer);
+
+                if(___gameMap.CanMarkerPan()) {
+                    ___gameMapObject.transform.localPosition -= panVec;
+                    ___gameMap.KeepWithinBounds(InventoryMapManager.SceneMapMarkerZoomScale);
+                }
+
+            }
+
+
+
+            bool mouseCloseToPin = false;
+            if(!isPanning)
+            {
+                if(IsAPinSelected(___collidingMarkers))
+                {
+                    Vector2 pinPos = GetPinCorrectedPos(___collidingMarkers, ___gameMap);
+                    mouseCloseToPin = AreTwoPointsClose(mousePosLimited, pinPos);
+                }
+            }
+            // Closer Pins = nice, but bugs the collisions (ie: removal) process.
+            //      theoretically, still doable, but needs more code :/
+            //      ie: re-doing MORE of how the game handles things.
+            //
+            // AddToCollidingList(GameObject go)
+            // RemoveFromCollidingList(GameObject go)
+            // SetCollisionTextAndState(__instance, mouseCloseToPin); // set by above
+            
+            ProcessMouseCursorMovement(// ___collidingMarkers, // ref __result, 
+                ref ___placementCursor, // ___gameMap, 
+                mouseCloseToPin, mousePosLimited);
+
+            // "Adjust" cursor towrds pin if mouse-over = game does it.
+            
+            // Process Inputs
+            if(!isPanning)
+            {
+                if (Input.GetMouseButtonDown(0)) // left clicked
+                {
+                    ProcessMarkerPutRemove(__instance, mouseCloseToPin);
+                }
+            }
+            
+
+
+        }
+
+        private static Vector3 GetPanVecAndConstrainMouse(ref Vector2 mousePosLimited, 
+            Bounds bounds, float ___panSpeed, float ___placementTimer)
+        {
+            var boundLower = bounds.center - bounds.extents;
+            var boundUpper = bounds.center + bounds.extents;
+
+            float modPanSpd = PIN_MAP_PAN_SPEED * ___panSpeed * Time.unscaledDeltaTime;
+            Vector3 panVec = new();
+            if(mousePosLimited.x < boundLower.x) {
+                mousePosLimited.x = boundLower.x;
+                if(___placementTimer <= 0f)
+                    panVec.x = -modPanSpd;
+            } else if(mousePosLimited.x > boundUpper.x) {
+                mousePosLimited.x = boundUpper.x;
+                if(___placementTimer <= 0f)
+                    panVec.x = modPanSpd;
+            }
+            if(mousePosLimited.y < boundLower.y) {
+                mousePosLimited.y = boundLower.y;
+                if(___placementTimer <= 0f)
+                    panVec.y = -modPanSpd;
+            } else if(mousePosLimited.y > boundUpper.y) {
+                mousePosLimited.y = boundUpper.y;
+                if(___placementTimer <= 0f)
+                    panVec.y = modPanSpd;
+            }
+
+            return panVec;
+        }
+
+        private static bool IsMousePastEdge(Bounds bounds, Vector2 mousePosLimited)
+        {
+            return !bounds.Contains(mousePosLimited);
+        }
+
+        // private static void SetCollisionTextAndState(MapMarkerMenu instance, 
+        //     bool mouseCloseToPin)
+        // {
+        //     if(mouseCloseToPin)
+        //         instance.IsColliding();
+        //     else
+        //         instance.IsNotColliding();
+        // }
+
+        private static void ProcessMouseCursorMovement( 
+            // ref bool hasCursorMoved, 
+            ref GameObject placementCursor,
+            bool mouseoverPin, Vector2 mousePos)
+        {
+            if(mouseoverPin) return; // if we're mousing a pin, let game handle transition?
+            if(!HasMouseMoved()) return; // no mouse move = ignore input.
+
+            MoveCursorToMouse(// ref hasCursorMoved, 
+                ref placementCursor, mousePos);
+        }
+
+        private static Vector2 GetPinCorrectedPos(List<GameObject> collidingMarkers, 
+            GameMap gameMap)
+        {
+            return collidingMarkers.Last().transform.position -
+                gameMap.transform.parent.position;
+        }
+
+        private static bool AreTwoPointsClose(Vector2 p1, 
+            Vector2 p2)
+        {
+            var distance = (p1 - p2).magnitude;
+            // Logger.LogInfo("distance = " + SafeToString(distance));
+            return distance < MAGIC_GAME_PIN_COLLIDER_DISTANCE;
+        }
+
+        private static bool IsAPinSelected(List<GameObject> collidingMarkers)
+        {
+            return collidingMarkers.Count > 0;
+        }
+
+        private static void MoveCursorToMouse(// ref bool hasCursorMoved, 
+            ref GameObject placementCursor, Vector2 mousePos)
+        {
+            placementCursor.transform.position = mousePos;
+            //hasCursorMoved = true;
+        }
+
+        private static void ProcessMarkerPutRemove(MapMarkerMenu instance, bool mouseover)
+        {
+            if (mouseover)// instance.collidingWithMarker)
+			{
+				instance.RemoveMarker();
+			}
+			else
+			{
+				instance.PlaceMarker();
+			}
+        }
+
+        private static bool IsMouseWithinBounds(Vector2 mousePos, 
+            float placementCursorMinX, float placementCursorMaxX, 
+            float placementCursorMinY, float placementCursorMaxY)
+        {
+            if(mousePos.x < placementCursorMinX) return false;
+            if(mousePos.x > placementCursorMaxX) return false;
+            if(mousePos.x < placementCursorMinY) return false;
+            if(mousePos.x > placementCursorMaxY) return false;
+            return true;
+        }
+
+        private static bool HasMouseMoved()
+        {
+            return (Input.GetAxis("Mouse X") != 0) || (Input.GetAxis("Mouse Y") != 0);
         }
     }
 
