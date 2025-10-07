@@ -845,6 +845,16 @@ public class Plugin : BaseUnityPlugin
                     ProcessMarkerPutRemove(__instance, mouseCloseToPin);
                 }
             }
+
+            
+            if(Input.GetAxisRaw("Mouse ScrollWheel") < 0) // scroll down
+            {
+                __instance.MarkerSelectLeft();
+            }
+            if(Input.GetAxisRaw("Mouse ScrollWheel") > 0) // scroll down
+            {
+                __instance.MarkerSelectRight();
+            }
             
 
 
