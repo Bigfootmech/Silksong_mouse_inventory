@@ -249,6 +249,42 @@ public class Plugin : BaseUnityPlugin
             base.MouseOverFunction();
         }
 
+    public class MarkerClicker : OnClickClass
+    {
+        public MapMarkerMenu MarkerController;
+        public int Index = -1;
+
+        protected override void ClickFunction()
+        {
+            if(!IsInventoryOpen()) return;
+            if(!MarkerController.inPlacementMode) return;
+
+			MarkerController.timer = MarkerController.uiPause;
+            MarkerController.selectedIndex = Index;
+            MarkerController.MarkerSelect(MarkerController.selectedIndex, isInstant: false);
+
+            // Logger.LogInfo("Click Test. " + SafeToString(gameObject.name));
+        }
+    }
+
+    public class TestClicker : OnClickClass
+    {
+        protected override void ClickFunction()
+        {
+            Logger.LogInfo("Click Test. " + SafeToString(gameObject.name));
+        }
+        
+        protected override void MouseOverFunction()
+        {
+            Logger.LogInfo("Mouseover Test." + SafeToString(gameObject.name));
+        }
+
+        protected override void WhileMouseOvered()
+        {
+            Logger.LogInfo("do this every frame." + SafeToString(gameObject.name));
+        }
+    }
+
         public class DraggingAction
         {
             public bool IsDragging;
@@ -360,24 +396,6 @@ public class Plugin : BaseUnityPlugin
                 TravelVector.y = SPEED;
             else
                 TravelVector.y = -SPEED;
-        }
-    }
-
-    public class TestClicker : OnClickClass
-    {
-        protected override void ClickFunction()
-        {
-            Logger.LogInfo("Click Test. " + SafeToString(gameObject.name));
-        }
-        
-        protected override void MouseOverFunction()
-        {
-            Logger.LogInfo("Mouseover Test." + SafeToString(gameObject.name));
-        }
-
-        protected override void WhileMouseOvered()
-        {
-            Logger.LogInfo("do this every frame." + SafeToString(gameObject.name));
         }
     }
 
@@ -761,7 +779,27 @@ public class Plugin : BaseUnityPlugin
         }
     }
 
-
+    
+    
+    [HarmonyPatch(typeof(MapMarkerMenu), "Start")]
+    public class MapMarkerStartInject
+    {
+        [HarmonyPostfix]
+        static void Postfix(MapMarkerMenu __instance
+            // , Animator[] ___markers
+            )
+        {
+            for (int i = 0; i < __instance.markers.Length; i++)
+            // for(int i = 0; i++; i< __instance.leng)
+            {
+                var go = __instance.markers[i].gameObject;
+                go.AddComponent<BoxCollider2D>();
+                var addedClicker = go.AddComponent<MarkerClicker>();
+                addedClicker.MarkerController = __instance;
+                addedClicker.Index = i;
+            }
+        }
+    }
 
     
     [HarmonyPatch(typeof(MapMarkerMenu), "Update")]
