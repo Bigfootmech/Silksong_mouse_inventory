@@ -17,6 +17,7 @@
     <PackageProjectUrl>https://github.com/Bigfootmech/Silksong_mouse_inventory</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Bigfootmech/Silksong_mouse_inventory</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+	<Description>Use Mouse in the Inventory (Work in Progress).</Description>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
     <DebugType>none</DebugType>
