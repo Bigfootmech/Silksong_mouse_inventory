@@ -19,8 +19,12 @@
     <RepositoryType>git</RepositoryType>
 	<Description>Use Mouse in the Inventory (Work in Progress).</Description>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-    <DebugType>none</DebugType>
+  <PropertyGroup Condition="'$(Configuration)' != 'Debug'">
+    <PathMap>$(MSBuildProjectDirectory)=src</PathMap>
+    <Deterministic>true</Deterministic>
+    <PlatformTarget>x64</PlatformTarget>
+
+    <SignAssembly Condition="'$(AssemblyOriginatorKeyFile)' != ''">true</SignAssembly>
   </PropertyGroup>
 
   <ItemGroup>
