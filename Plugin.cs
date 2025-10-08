@@ -19,6 +19,8 @@ public class Plugin : BaseUnityPlugin
     private const string CURSOR_CONTROL_FSM_NAME = "Inventory Proxy";
     private const string MAP_STATE_OVERMAP = "Wide Map";
     private const string MAP_STATE_ZOOMED = "Zoomed In";
+    private const string MAP_STATE_HALF_ZOOM = "Map Zoom";
+    private const string MAP_STATE_HALF_UNZOOM = "Zoom Out";
     private const string MAP_STATE_MARKERING = "Marker Select Menu";
     
     private static bool SwitchedPanesThisFrame = false;
@@ -37,6 +39,9 @@ public class Plugin : BaseUnityPlugin
     private static int ScrollSmoothCountdown = 0;
     private static float MAGIC_GAME_PIN_COLLIDER_DISTANCE = 0.57f;
     private static float PIN_MAP_PAN_SPEED = 3f;
+
+    private const int FRAMES_TO_TRANSITION = 3;
+    private static int CountTransitionFrames = FRAMES_TO_TRANSITION;
 
     // private static int ScrollSmoothCountUp = 0;
     private static bool IsScrolling()
@@ -710,9 +715,20 @@ public class Plugin : BaseUnityPlugin
                     CurrentPanesCursorControlFsm = CurrentPaneObject.LocateMyFSM(CURSOR_CONTROL_FSM_NAME); // also possible to load these at start, and retrieve with paneControl
                 }
                 
-                if (Input.GetMouseButtonDown(1)) // right clicked
+                bool rightClick = Input.GetMouseButtonDown(1);
+                bool mouseBack = Input.GetMouseButtonDown(3);
+                bool mouseForward = Input.GetMouseButtonDown(4);
+                if (rightClick) // right clicked
                 {
                     InventoryBack();
+                }
+                if (rightClick) // right clicked
+                {
+                    InventoryBack();
+                }
+                if (mouseBack) // right clicked
+                {
+                    MapZoomStateFsm.SendEvent("UI CANCEL");
                 }
 
                 ScrollHover scrollHover = GetScrollHoverForPane(CurrentPaneType);
@@ -722,18 +738,28 @@ public class Plugin : BaseUnityPlugin
                 {
                     if(MapZoomStateFsm.ActiveStateName == MAP_STATE_OVERMAP)
                     {
-                        if(Input.GetAxisRaw("Mouse ScrollWheel") > 0) // scroll up
+                        bool scrollUp = Input.GetAxisRaw("Mouse ScrollWheel") > 0;
+
+                        if(scrollUp || mouseForward)
                         {
                             CurrentPanesCursorControlFsm.SendEvent("UI CONFIRM"); // "zoom in"
                         }
 
                         MapDragging.Stop();
                     } 
+
+                    UnstuckZoomControls();
+
                     if(MapZoomStateFsm.ActiveStateName == MAP_STATE_ZOOMED) 
                     {
                         if(Input.GetAxisRaw("Mouse ScrollWheel") < 0) // scroll down
                         {
                             MapBack();
+                        }
+                        if(mouseForward)
+                        {
+
+                            MapZoomStateFsm.SendEvent("UI CONFIRM");
                         }
 
                         MapDragging.Update();
@@ -751,6 +777,42 @@ public class Plugin : BaseUnityPlugin
 
             } catch (Exception e) {
                 Logger.LogError("Error: " + e.Message);
+            }
+        }
+
+        private static void UnstuckZoomControls()
+        {
+            // Peak Jank!
+            // If left alone, input locked in for aaages while game LERPs
+            // If frames too short, game stuck on overmap
+            // If player click in while switching, Alpha of layers is wrong.
+            // I could probably fix it.
+            // but already spent too much time on this.
+            
+            if(MapZoomStateFsm.ActiveStateName == MAP_STATE_HALF_ZOOM) 
+            {
+                CountTransitionFrames--;
+                if(CountTransitionFrames == 0)
+                {
+                    // Logger.LogInfo("Whyyyyyyy: " + SafeToString(MapZoomStateFsm.ActiveStateName));
+                    CountTransitionFrames = FRAMES_TO_TRANSITION;
+                    MapZoomStateFsm.SendEvent("ZOOMED IN");
+                }
+                        
+                // var mgr = CurrentPaneObject.GetComponent<InventoryMapManager>();
+                // MapZoomStateFsm.SendEvent(mgr.zoomedInEvent);
+            }
+            if(MapZoomStateFsm.ActiveStateName == MAP_STATE_HALF_UNZOOM) 
+            {
+                CountTransitionFrames--;
+                if(CountTransitionFrames == 0)
+                {
+                    // Logger.LogInfo("oh, a blocker: " + SafeToString(MapZoomStateFsm.ActiveStateName));
+                    CountTransitionFrames = FRAMES_TO_TRANSITION;
+                    MapZoomStateFsm.SendEvent("ZOOMED OUT");
+                }
+                // var mgr = CurrentPaneObject.GetComponent<InventoryMapManager>();
+                // MapZoomStateFsm.SendEvent(mgr.zoomedInEvent);
             }
         }
 
