@@ -770,8 +770,11 @@ public class Plugin : BaseUnityPlugin
 
                     if(MapZoomStateFsm.ActiveStateName == MAP_STATE_MARKERING)
                     {
-                        MapDragging.Stop();
                         // we want to replace cursor with selector
+                        // did in different hook MapMarkerMenu.Update/Pan
+
+                        MapDragging.Stop();
+                        
                     }
                 }
 
@@ -888,6 +891,13 @@ public class Plugin : BaseUnityPlugin
             )
         {
             if(!___inPlacementMode) return;
+            
+            // Tab = switch pins
+            if(InputHandler.Instance.inputActions.QuickMap.WasPressed)
+            {
+                __instance.MarkerSelectRight();
+            }
+
             // Logger.LogInfo("time = " + SafeToString(Time.unscaledDeltaTime));
 
             var isPanning = false;
