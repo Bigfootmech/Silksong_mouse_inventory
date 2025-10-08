@@ -39,6 +39,7 @@ public class Plugin : BaseUnityPlugin
     private static int ScrollSmoothCountdown = 0;
     private static float MAGIC_GAME_PIN_COLLIDER_DISTANCE = 0.57f;
     private static float PIN_MAP_PAN_SPEED = 3f;
+    private const float DOUBLE_CLICK_DELAY_MAX = 0.3f;
 
     private const int FRAMES_TO_TRANSITION = 3;
     private static int CountTransitionFrames = FRAMES_TO_TRANSITION;
@@ -108,6 +109,8 @@ public class Plugin : BaseUnityPlugin
     {
         return ScrollHoverSet.GetValueSafe(currentPaneType);
     }
+    
+    private static float DoubleClickTimer;
     
     private void Awake() // Mod startup
     {
@@ -752,20 +755,19 @@ public class Plugin : BaseUnityPlugin
 
                     if(MapZoomStateFsm.ActiveStateName == MAP_STATE_ZOOMED) 
                     {
-                        if(Input.GetAxisRaw("Mouse ScrollWheel") < 0) // scroll down
+                        bool scrollDown = Input.GetAxisRaw("Mouse ScrollWheel") < 0;
+
+                        if(scrollDown)
                         {
                             MapBack();
                         }
-                        if(mouseForward)
-                        {
 
+                        if(mouseForward || WasDoubleClick())
+                        {
                             MapZoomStateFsm.SendEvent("UI CONFIRM");
                         }
 
-                        MapDragging.Update();
-
-
-                        // we want dragging
+                        MapDragging.Update(); // we want dragging
                     }
 
                     if(MapZoomStateFsm.ActiveStateName == MAP_STATE_MARKERING)
@@ -781,6 +783,29 @@ public class Plugin : BaseUnityPlugin
             } catch (Exception e) {
                 Logger.LogError("Error: " + e.Message);
             }
+        }
+
+        private static bool WasDoubleClick()
+        {
+            DoubleClickTimer -= Time.unscaledDeltaTime;
+            DoubleClickTimer = Math.Max(DoubleClickTimer, 0.0f); // clamp
+
+            Logger.LogInfo("Timer: " + SafeToString(DoubleClickTimer));
+
+            bool leftClick = Input.GetMouseButtonDown(0);
+
+            if(!leftClick) return false;
+            
+            // DoubleClickTimer = 0f;
+            if(DoubleClickTimer != 0f)
+            {
+                DoubleClickTimer = 0f;
+                return true;
+            }
+            
+
+            DoubleClickTimer = DOUBLE_CLICK_DELAY_MAX;
+            return false;
         }
 
         private static void UnstuckZoomControls()
