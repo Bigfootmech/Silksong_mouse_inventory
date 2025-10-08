@@ -39,7 +39,7 @@ public class Plugin : BaseUnityPlugin
     private static int ScrollSmoothCountdown = 0;
     private static float MAGIC_GAME_PIN_COLLIDER_DISTANCE = 0.57f;
     private static float PIN_MAP_PAN_SPEED = 3f;
-    private const float DOUBLE_CLICK_DELAY_MAX = 0.3f;
+    private const float DOUBLE_CLICK_DELAY_MAX = 0.25f;
 
     private const int FRAMES_TO_TRANSITION = 3;
     private static int CountTransitionFrames = FRAMES_TO_TRANSITION;
@@ -110,7 +110,9 @@ public class Plugin : BaseUnityPlugin
         return ScrollHoverSet.GetValueSafe(currentPaneType);
     }
     
-    private static float DoubleClickTimer;
+    private static float DoubleClickTimer = 0.0f;
+    private static bool AwaitMouseUp = false;
+    private static bool JustEnteredMarkerState = false;
     
     private void Awake() // Mod startup
     {
@@ -762,7 +764,10 @@ public class Plugin : BaseUnityPlugin
                             MapBack();
                         }
 
-                        if(mouseForward || WasDoubleClick())
+                        var doubleclick = WasDoubleClick();
+                        if(doubleclick)
+                            JustEnteredMarkerState = true;
+                        if(mouseForward || doubleclick)
                         {
                             MapZoomStateFsm.SendEvent("UI CONFIRM");
                         }
@@ -790,13 +795,21 @@ public class Plugin : BaseUnityPlugin
             DoubleClickTimer -= Time.unscaledDeltaTime;
             DoubleClickTimer = Math.Max(DoubleClickTimer, 0.0f); // clamp
 
-            Logger.LogInfo("Timer: " + SafeToString(DoubleClickTimer));
-
-            bool leftClick = Input.GetMouseButtonDown(0);
-
-            if(!leftClick) return false;
+            // Logger.LogInfo($"Await up = {SafeToString(AwaitMouseUp)}, Timer: {SafeToString(DoubleClickTimer)}");
             
-            // DoubleClickTimer = 0f;
+            bool leftMbDown = Input.GetMouseButtonDown(0); // left down (couple frames)
+            bool leftMbUp = Input.GetMouseButtonUp(0); // left up (couple frames)
+            // bool leftMb = Input.GetMouseButton(0); // polling state
+            
+            // Logger.LogInfo($"Button states: L {leftMb} LD {SafeToString(leftMbDown)} LU {SafeToString(leftMbUp)}");
+
+            if(leftMbUp) 
+                AwaitMouseUp = false;
+
+            if(!leftMbDown || AwaitMouseUp) {
+                return false;
+            }
+
             if(DoubleClickTimer != 0f)
             {
                 DoubleClickTimer = 0f;
@@ -805,6 +818,7 @@ public class Plugin : BaseUnityPlugin
             
 
             DoubleClickTimer = DOUBLE_CLICK_DELAY_MAX;
+            AwaitMouseUp = true;
             return false;
         }
 
@@ -992,7 +1006,7 @@ public class Plugin : BaseUnityPlugin
             }
             
 
-
+            JustEnteredMarkerState = false;
         }
 
         private static Vector3 GetPanVecAndConstrainMouse(ref Vector2 mousePosLimited, 
@@ -1044,6 +1058,13 @@ public class Plugin : BaseUnityPlugin
             ref GameObject placementCursor,
             bool mouseoverPin, Vector2 mousePos)
         {
+            if(JustEnteredMarkerState)
+            {
+                MoveCursorToMouse(// ref hasCursorMoved, 
+                    ref placementCursor, mousePos);
+            }
+            
+
             if(mouseoverPin) return; // if we're mousing a pin, let game handle transition?
             if(!HasMouseMoved()) return; // no mouse move = ignore input.
 
