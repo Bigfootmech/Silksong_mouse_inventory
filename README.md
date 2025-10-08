@@ -20,6 +20,7 @@ Currently available: <br />
 - Map click-n-drag (v0.1.2)
 - Mouse-over scroll-arrows to scroll (inv, crests, quests, hunt journal) (v0.1.3)
 - Mouse-scroll while hovering arrow-scroll sections (janky) (v0.1.4)
+- Markers placable by mouse. Navigate in with normal confirm, or mouse side buttons, or double click. Click pins to change, or scroll mouse, or use "quick map" button. (v0.1.5)
 
 <h1>Links:</h1>
 GitHub: <a href = "https://github.com/Bigfootmech/Silksong_mouse_inventory">https://github.com/Bigfootmech/Silksong_mouse_inventory</a> <br />
