@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-using static inventory_mouse_use.Plugin.OnClickInventoryItem;
 
 namespace inventory_mouse_use;
 
@@ -113,6 +112,7 @@ public class Plugin : BaseUnityPlugin
     private static float DoubleClickTimer = 0.0f;
     private static bool AwaitMouseUp = false;
     private static bool JustEnteredMarkerState = false;
+    private static bool DoInjectMenuSuperForCompletedQuestToggle = false;
     
     private void Awake() // Mod startup
     {
@@ -177,6 +177,12 @@ public class Plugin : BaseUnityPlugin
         {
             // Logger.LogInfo("do this every frame, EVERY item");
         }
+
+        protected void VisualSelectMyObj()
+        {
+            InventoryItemManager InvItemMgr = CurrentPaneObject.GetComponent<InventoryItemManager>();
+            InvItemMgr.SetSelected(this.gameObject);
+        }
     }
 
     public class OnClickBorderArrow : OnClickClass
@@ -209,8 +215,7 @@ public class Plugin : BaseUnityPlugin
         protected override void MouseOverFunction()
         {
             // Logger.LogInfo("mouseover on " + SafeToString(gameObject.name));
-            InventoryItemManager InvItemMgr = CurrentPaneObject.GetComponent<InventoryItemManager>();
-            InvItemMgr.SetSelected(this.gameObject);
+            VisualSelectMyObj();
         }
 
         private InventoryPaneList.PaneTypes GetTargetPane() // not available at inventory start
@@ -259,6 +264,12 @@ public class Plugin : BaseUnityPlugin
             base.MouseOverFunction();
         }
 
+        private InventoryItemSelectable GetOwnSelectable()
+        {
+            return this.gameObject.GetComponent<InventoryItemSelectable>();
+        }
+    }
+
     public class MarkerClicker : OnClickClass
     {
         public MapMarkerMenu MarkerController;
@@ -277,111 +288,42 @@ public class Plugin : BaseUnityPlugin
         }
     }
 
-    public class TestClicker : OnClickClass
+    public class ShowHideCompletedQuestsClicker : OnClickClass
     {
         protected override void ClickFunction()
         {
-            Logger.LogInfo("Click Test. " + SafeToString(gameObject.name));
+            // Logger.LogInfo("Click Test. " + SafeToString(gameObject.name));
+
+            // InventoryItemQuestManager : InventoryItemManager
+            // InventoryPaneInput
+            // InventoryPane
+            
+            DoInjectMenuSuperForCompletedQuestToggle = true;
         }
         
         protected override void MouseOverFunction()
         {
-            Logger.LogInfo("Mouseover Test." + SafeToString(gameObject.name));
+            // Logger.LogInfo("Mouseover " + SafeToString(gameObject.name));
+            VisualSelectMyObj();
+        }
+    }
+
+    public class TestClicker : OnClickClass
+    {
+        protected override void ClickFunction()
+        {
+            Logger.LogInfo("Click Test: " + SafeToString(gameObject.name));
+        }
+        
+        protected override void MouseOverFunction()
+        {
+            Logger.LogInfo("Mouseover Test: " + SafeToString(gameObject.name));
+            VisualSelectMyObj();
         }
 
         protected override void WhileMouseOvered()
         {
-            Logger.LogInfo("do this every frame." + SafeToString(gameObject.name));
-        }
-    }
-
-        public class DraggingAction
-        {
-            public bool IsDragging;
-            private Vector2 MouseLastPos;
-
-            public void Update()
-            {
-                // Logger.LogInfo("Is being processed");
-
-                if(IsDragging)
-                {
-                    DoDragAction();
-                }
-                
-                if (Input.GetMouseButtonDown(0)) // leftclick just pressed
-                {
-                    // Logger.LogInfo("MouseDown");
-                    if(!IsDragging)
-                    {
-                        // StartDragTimer();
-                        StartDragging();
-                    } 
-                } 
-                
-                if (Input.GetMouseButtonUp(0)){ // left released
-                    if(IsDragging) // and WAS dragging
-                    {
-                        Release();
-                    }
-                }
-
-            }
-
-            private void StartDragging()
-            {
-                IsDragging = true;
-                MouseLastPos = GetLocalMousePos();
-            }
-
-            public void Stop()
-            {
-                Release();
-            }
-
-            private void Release()
-            {
-                IsDragging = false;
-            }
-
-            private void DoDragAction()
-            {
-                if(!IsInventoryOpen()) 
-                {
-                    Release();
-                    return;
-                }
-
-                SetMapCoordsByMouse();
-            }
-
-            private Vector2 GetMouseDragDelta()
-            {
-                Vector2 currMousePos = GetLocalMousePos();
-                Vector2 mouseDelta = currMousePos - MouseLastPos;
-                MouseLastPos = currMousePos;
-                return mouseDelta;
-            }
-
-            private void SetMapCoordsByMouse()
-            {
-                if(CurrentPaneType != InventoryPaneList.PaneTypes.Map ||
-                    MapZoomStateFsm.ActiveStateName != MAP_STATE_ZOOMED)
-                {
-                    Release();
-                    return;
-                }
-                
-                Vector2 mouseDelta = GetMouseDragDelta();
-                Vector2 mapCurrPos = ZoomedMapControl.transform.localPosition;
-
-                ZoomedMapControl.UpdateMapPosition(mapCurrPos + mouseDelta);
-            }
-        }
-
-        private InventoryItemSelectable GetOwnSelectable()
-        {
-            return this.gameObject.GetComponent<InventoryItemSelectable>();
+            Logger.LogInfo("do this every frame for obj: " + SafeToString(gameObject.name));
         }
     }
 
@@ -457,6 +399,90 @@ public class Plugin : BaseUnityPlugin
         }
     }
 
+    public class DraggingAction
+    {
+        public bool IsDragging;
+        private Vector2 MouseLastPos;
+
+        public void Update()
+        {
+            // Logger.LogInfo("Is being processed");
+
+            if(IsDragging)
+            {
+                DoDragAction();
+            }
+                
+            if (Input.GetMouseButtonDown(0)) // leftclick just pressed
+            {
+                // Logger.LogInfo("MouseDown");
+                if(!IsDragging)
+                {
+                    // StartDragTimer();
+                    StartDragging();
+                } 
+            } 
+                
+            if (Input.GetMouseButtonUp(0)){ // left released
+                if(IsDragging) // and WAS dragging
+                {
+                    Release();
+                }
+            }
+
+        }
+
+        private void StartDragging()
+        {
+            IsDragging = true;
+            MouseLastPos = GetLocalMousePos();
+        }
+
+        public void Stop()
+        {
+            Release();
+        }
+
+        private void Release()
+        {
+            IsDragging = false;
+        }
+
+        private void DoDragAction()
+        {
+            if(!IsInventoryOpen()) 
+            {
+                Release();
+                return;
+            }
+
+            SetMapCoordsByMouse();
+        }
+
+        private Vector2 GetMouseDragDelta()
+        {
+            Vector2 currMousePos = GetLocalMousePos();
+            Vector2 mouseDelta = currMousePos - MouseLastPos;
+            MouseLastPos = currMousePos;
+            return mouseDelta;
+        }
+
+        private void SetMapCoordsByMouse()
+        {
+            if(CurrentPaneType != InventoryPaneList.PaneTypes.Map ||
+                MapZoomStateFsm.ActiveStateName != MAP_STATE_ZOOMED)
+            {
+                Release();
+                return;
+            }
+                
+            Vector2 mouseDelta = GetMouseDragDelta();
+            Vector2 mapCurrPos = ZoomedMapControl.transform.localPosition;
+
+            ZoomedMapControl.UpdateMapPosition(mapCurrPos + mouseDelta);
+        }
+    }
+
     private static string SafeToString(System.Object ob) // helper
     {
         return ob?.ToString() ?? "null";
@@ -488,7 +514,7 @@ public class Plugin : BaseUnityPlugin
 
             try {
                 var camTfm = __instance.transform.parent.parent;
-                HudCamera = camTfm.GetComponent<Camera>();
+                HudCamera = camTfm.GetComponent<UnityEngine.Camera>();
             } catch (Exception e) {
                 Logger.LogError("Getting Hud Camera Failed");
                 Logger.LogError(e.Message);
@@ -577,7 +603,35 @@ public class Plugin : BaseUnityPlugin
                 Logger.LogError("Failed attaching onclick to missed overmap items");
                 Logger.LogError(e.Message);
             }
+            
+            try {
+                UnityEngine.Transform questsTfm = inventoryTfm.Find("Quests");
+                UnityEngine.Transform showHideCompletedQuestsSet = 
+                    questsTfm.Find("Toggle Completed Action"); // off to left side :(
+                // Transform text = showHideCompletedQuestsSet.Find("Text"); // no hitbox?
+                Transform abi = showHideCompletedQuestsSet.Find("ActionButtonIcon");
+                var script = abi.gameObject.AddComponent<ShowHideCompletedQuestsClicker>();
+                abi.gameObject.AddComponent<BoxCollider2D>();
+                // Transform abi2 = abi.GetChild(0); // works
+                // AttachTestClicker(abi2);
+
+                Logger.LogInfo("Attached comps");
+
+            } catch (Exception e) {
+                Logger.LogError("Failed attaching onclick to missed inv items");
+                Logger.LogError(e.Message);
+            }
 	    }
+
+        private static void AttachTestClicker(UnityEngine.Transform tfm)
+        {
+            AttachTestClicker(tfm.gameObject);
+        }
+        private static void AttachTestClicker(UnityEngine.GameObject go)
+        {
+            var script = go.AddComponent<TestClicker>();
+            go.AddComponent<BoxCollider2D>();
+        }
     }
     
     [HarmonyPatch(typeof(ScrollView), "Start")]
@@ -1127,6 +1181,21 @@ public class Plugin : BaseUnityPlugin
             return (Input.GetAxis("Mouse X") != 0) || (Input.GetAxis("Mouse Y") != 0);
         }
     }
-
-
+    
+    
+    [HarmonyPatch(typeof(InventoryItemQuestManager), "Update")]
+    public class InjectSuperCommandForCompletedQuestToggle
+    {
+        [HarmonyPrefix]
+        static void Prefix(InventoryItemQuestManager __instance)
+        {
+            if(DoInjectMenuSuperForCompletedQuestToggle)
+            {
+                InputHandler.Instance.inputActions.MenuSuper.thisState.State = true;
+                DoInjectMenuSuperForCompletedQuestToggle = false;
+            
+                // Logger.LogInfo("State " + SafeToString(Platform.Current.GetMenuAction(InputHandler.Instance.inputActions)));
+            }
+        }
+    }
 }
