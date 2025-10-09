@@ -113,6 +113,8 @@ public class Plugin : BaseUnityPlugin
     private static bool AwaitMouseUp = false;
     private static bool JustEnteredMarkerState = false;
     private static bool DoInjectMenuSuperForCompletedQuestToggle = false;
+
+    private static bool PreventBackOut = false; // Rosarie cannon reload hack
     
     private void Awake() // Mod startup
     {
@@ -140,7 +142,7 @@ public class Plugin : BaseUnityPlugin
             ClickFunction();
         }
 
-        public void OnMouseOver() // every frame
+        public virtual void OnMouseOver() // every frame
         {
             // every frame
             if(!IsInventoryOpen()) return; // if not in inventory, ignore button contact
@@ -155,7 +157,7 @@ public class Plugin : BaseUnityPlugin
             // Logger.LogDebug("Mouseover");
         }
 
-        public void OnMouseExit() // once
+        public virtual void OnMouseExit() // once
         {
             MouseAlreadyIn = false;
             // Logger.LogDebug("Mouse left");
@@ -267,6 +269,53 @@ public class Plugin : BaseUnityPlugin
         private InventoryItemSelectable GetOwnSelectable()
         {
             return this.gameObject.GetComponent<InventoryItemSelectable>();
+        }
+    }
+
+    public class OnMouseoverRosaryCannon : OnClickInventoryItem
+    {
+        
+        public override void OnMouseOver() // every frame
+        {
+            // Logger.LogInfo("do this every frame for obj: " + SafeToString(gameObject.name));
+            PreventBackOut = true;
+            base.OnMouseOver();
+        }
+
+        public override void OnMouseExit() // once
+        {
+            PreventBackOut = false;
+            base.OnMouseExit();
+        }
+    }
+
+    public class OnMouseoverAttackSlotAuxRosaryCannon : OnClickInventoryItem
+    {
+        InventoryToolCrestSlot slotScript = null;
+
+        public override void OnMouseOver() // every frame
+        {
+            // Logger.LogInfo("do this every frame for obj: " + SafeToString(gameObject.name));
+            
+            if(slotScript == null)
+                slotScript = this.gameObject.GetComponent<InventoryToolCrestSlot>();
+            if(slotScript != null && slotScript.DisplayName == "Rosary Cannon")
+                PreventBackOut = true;
+                // Logger.LogInfo("Slot Item name = " + SafeToString(slotScript.DisplayName));
+                // bool conf = go.TryGetComponent<InventoryToolCrestSlot>(out var attSlt);
+                // if(conf && attSlt.DisplayName == "Rosary Cannon")
+                // {
+                //     Logger.LogInfo("Found Aux RC = " + SafeToString(go.name));
+                //     go.AddComponent<OnMouseoverRosaryCannon>();
+                //     return;
+                // }
+            base.OnMouseOver();
+        }
+
+        public override void OnMouseExit() // once
+        {
+            PreventBackOut = false;
+            base.OnMouseExit();
         }
     }
 
@@ -705,8 +754,40 @@ public class Plugin : BaseUnityPlugin
             // var obj = __instance.gameObject;
             // Logger.LogInfo("obj = " + SafeToString(__instance.gameObject));
             // looking out for Wide_map__xxxx_{name}
-            __instance.gameObject.AddComponent<OnClickInventoryItem>();
-            // Logger.LogInfo("Added click component?");
+
+            var go = __instance.gameObject;
+            // 
+            
+            bool hasComp = go.TryGetComponent<OnClickInventoryItem>(out var gotComp);
+
+
+            if(go.name == "Rosary Cannon")
+            {
+                // Logger.LogInfo("Found = " + SafeToString(go.name));
+                if(hasComp) Destroy(gotComp);
+                go.AddComponent<OnMouseoverRosaryCannon>();
+                return;
+            }
+            if(go.name == "Attack Slot(Clone)")
+            {
+                // bool conf = go.TryGetComponent<InventoryToolCrestSlot>(out var attSlt);
+                // if(conf && attSlt.DisplayName == "Rosary Cannon")
+                // {
+                // }
+                // Logger.LogInfo("Found Aux RC = " + SafeToString(go.name));
+                if(hasComp) Destroy(gotComp);
+                go.AddComponent<OnMouseoverAttackSlotAuxRosaryCannon>();
+                return;
+            }
+            
+            if(hasComp)
+            {
+                // Logger.LogInfo("Tried to add multiple on: " + SafeToString(go.name));
+                return;
+            }
+            
+            go.AddComponent<OnClickInventoryItem>();
+            // Logger.LogInfo("Added click component");
         }
     }
         
@@ -777,15 +858,16 @@ public class Plugin : BaseUnityPlugin
                 bool rightClick = Input.GetMouseButtonDown(1);
                 bool mouseBack = Input.GetMouseButtonDown(3);
                 bool mouseForward = Input.GetMouseButtonDown(4);
-                if (rightClick) // right clicked
+
+                // Rosary cannon hack - if switched panes, allow in case it gets stuck
+                if(CurrentPaneType != InventoryPaneList.PaneTypes.Tools)
+                    PreventBackOut = false;
+
+                if (rightClick)
                 {
                     InventoryBack();
                 }
-                if (rightClick) // right clicked
-                {
-                    InventoryBack();
-                }
-                if (mouseBack) // right clicked
+                if (mouseBack)
                 {
                     MapZoomStateFsm.SendEvent("UI CANCEL");
                 }
@@ -914,6 +996,8 @@ public class Plugin : BaseUnityPlugin
 
         private static void InventoryBack()
         {
+            if(PreventBackOut) return;
+
             if(CurrentPaneType != InventoryPaneList.PaneTypes.Map)
             {
                 TabbingControlFSM.SendEvent("BACK"); // doesn't work zoomed in... but otherwise ok

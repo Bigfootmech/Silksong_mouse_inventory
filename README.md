@@ -21,6 +21,8 @@ Currently available: <br />
 - Mouse-over scroll-arrows to scroll (inv, crests, quests, hunt journal) (v0.1.3)
 - Mouse-scroll while hovering arrow-scroll sections (janky) (v0.1.4)
 - Markers placable by mouse. Navigate in with normal confirm, or mouse side buttons, or double click. Click pins to change, or scroll mouse, or use "quick map" button. (v0.1.5)
+- Clickable "Show/Hide Completed Quests" in Tasks tab (v0.1.6)
+- hotfix: Prevent closing inventory with rightclick if hovering rosary cannon, to prevent incompatibility (v0.1.7)
 
 <h1>Links:</h1>
 GitHub: <a href = "https://github.com/Bigfootmech/Silksong_mouse_inventory">https://github.com/Bigfootmech/Silksong_mouse_inventory</a> <br />
