@@ -616,6 +616,17 @@ public class Plugin : BaseUnityPlugin
                 foreach(Transform child in currencyAndSpoolGroupTfm) {
                     if(child.name != "Spool Group")
                         child.gameObject.AddComponent<OnClickInventoryItem>();
+                    else 
+                    {
+                        UnityEngine.Transform radialLayout = child.Find("Radial Layout");
+                        
+                        foreach(Transform child2 in radialLayout) 
+                        {
+                            bool hasComp = child2.TryGetComponent<OnClickInventoryItem>(out _);
+                            if(!hasComp) child2.gameObject.AddComponent<OnClickInventoryItem>();
+                        }
+
+                    }
                 }
             } catch (Exception e) {
                 Logger.LogError("Failed attaching onclick to missed inv items");
