@@ -112,7 +112,7 @@ public class Plugin : BaseUnityPlugin
     private static float DoubleClickTimer = 0.0f;
     private static bool AwaitMouseUp = false;
     private static bool JustEnteredMarkerState = false;
-    private static bool DoInjectMenuSuperForCompletedQuestToggle = false;
+    private static bool DoInjectMenuSuper = false;
 
     private static bool PreventBackOut = false; // Rosarie cannon reload hack
     
@@ -337,7 +337,7 @@ public class Plugin : BaseUnityPlugin
         }
     }
 
-    public class ShowHideCompletedQuestsClicker : OnClickClass
+    public class MenuSuperClickerForQuestsAndCrests : OnClickClass
     {
         protected override void ClickFunction()
         {
@@ -347,7 +347,7 @@ public class Plugin : BaseUnityPlugin
             // InventoryPaneInput
             // InventoryPane
             
-            DoInjectMenuSuperForCompletedQuestToggle = true;
+            DoInjectMenuSuper = true;
         }
         
         protected override void MouseOverFunction()
@@ -670,15 +670,36 @@ public class Plugin : BaseUnityPlugin
                     questsTfm.Find("Toggle Completed Action"); // off to left side :(
                 // Transform text = showHideCompletedQuestsSet.Find("Text"); // no hitbox?
                 Transform abi = showHideCompletedQuestsSet.Find("ActionButtonIcon");
-                var script = abi.gameObject.AddComponent<ShowHideCompletedQuestsClicker>();
+                var script = abi.gameObject.AddComponent<MenuSuperClickerForQuestsAndCrests>();
                 abi.gameObject.AddComponent<BoxCollider2D>();
                 // Transform abi2 = abi.GetChild(0); // works
                 // AttachTestClicker(abi2);
 
-                Logger.LogInfo("Attached comps");
+            } catch (Exception e) {
+                Logger.LogError("Failed attaching onclick toggle quests");
+                Logger.LogError(e.Message);
+            }
+            
+            try {
+                UnityEngine.Transform toolsTfm = inventoryTfm.Find("Tools");
+                UnityEngine.Transform selectCrestsFullSet = 
+                    toolsTfm.Find("Change Crest Prompt");
+
+                Transform intermediate = selectCrestsFullSet.Find("Change Crest Button");
+
+                Transform wantClicked = intermediate.Find("Change Crest Action");
+                Transform alt = intermediate.Find("Parent").Find("Button Icon Regular");
+                Transform questStyle = wantClicked.Find("ActionButtonIcon");
+
+                GameObject go = questStyle.gameObject;
+                
+                var script = go.AddComponent<MenuSuperClickerForQuestsAndCrests>();
+                go.AddComponent<BoxCollider2D>();
+
+                // Logger.LogInfo("Attached comps");
 
             } catch (Exception e) {
-                Logger.LogError("Failed attaching onclick to missed inv items");
+                Logger.LogError("Failed attaching onclick crest selection");
                 Logger.LogError(e.Message);
             }
 	    }
@@ -1284,10 +1305,26 @@ public class Plugin : BaseUnityPlugin
         [HarmonyPrefix]
         static void Prefix(InventoryItemQuestManager __instance)
         {
-            if(DoInjectMenuSuperForCompletedQuestToggle)
+            if(DoInjectMenuSuper)
             {
                 InputHandler.Instance.inputActions.MenuSuper.thisState.State = true;
-                DoInjectMenuSuperForCompletedQuestToggle = false;
+                DoInjectMenuSuper = false;
+            
+                // Logger.LogInfo("State " + SafeToString(Platform.Current.GetMenuAction(InputHandler.Instance.inputActions)));
+            }
+        }
+    }
+    
+    [HarmonyPatch(typeof(InventoryToolCrestList), "Update")]
+    public class InjectSuperCommandForCrestSelect
+    {
+        [HarmonyPrefix]
+        static void Prefix(InventoryToolCrestList __instance)
+        {
+            if(DoInjectMenuSuper)
+            {
+                InputHandler.Instance.inputActions.MenuSuper.thisState.State = true;
+                DoInjectMenuSuper = false;
             
                 // Logger.LogInfo("State " + SafeToString(Platform.Current.GetMenuAction(InputHandler.Instance.inputActions)));
             }
