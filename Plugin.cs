@@ -113,6 +113,7 @@ public class Plugin : BaseUnityPlugin
     private static bool AwaitMouseUp = false;
     private static bool JustEnteredMarkerState = false;
     private static bool DoInjectMenuSuper = false;
+    private static bool DoInjectMenuCancel = false;
 
     private static bool PreventBackOut = false; // Rosarie cannon reload hack
     
@@ -336,7 +337,7 @@ public class Plugin : BaseUnityPlugin
             // Logger.LogInfo("Click Test. " + SafeToString(gameObject.name));
         }
     }
-
+    
     public class MenuSuperClickerForQuestsAndCrests : OnClickClass
     {
         protected override void ClickFunction()
@@ -348,6 +349,20 @@ public class Plugin : BaseUnityPlugin
             // InventoryPane
             
             DoInjectMenuSuper = true;
+        }
+        
+        protected override void MouseOverFunction()
+        {
+            // Logger.LogInfo("Mouseover " + SafeToString(gameObject.name));
+            VisualSelectMyObj();
+        }
+    }
+
+    public class MenuCancelClicker : OnClickClass
+    {
+        protected override void ClickFunction()
+        {
+            DoInjectMenuCancel = true;
         }
         
         protected override void MouseOverFunction()
@@ -702,6 +717,26 @@ public class Plugin : BaseUnityPlugin
                 Logger.LogError("Failed attaching onclick crest selection");
                 Logger.LogError(e.Message);
             }
+
+            try {
+                UnityEngine.Transform toolsTfm = inventoryTfm.Find("Tools");
+                UnityEngine.Transform cancelCrestsFullSet = 
+                    toolsTfm.Find("Cancel Action");
+                
+                Transform questStyle = cancelCrestsFullSet.Find("ActionButtonIcon");
+
+                GameObject go = questStyle.gameObject;
+                
+                // submit "back" action instead
+                var script = go.AddComponent<MenuCancelClicker>();
+                go.AddComponent<BoxCollider2D>();
+
+                // Logger.LogInfo("Attached comps");
+
+            } catch (Exception e) {
+                Logger.LogError("Failed attaching onclick crest cancel");
+                Logger.LogError(e.Message);
+            }
 	    }
 
         private static void AttachTestClicker(UnityEngine.Transform tfm)
@@ -1030,13 +1065,20 @@ public class Plugin : BaseUnityPlugin
         {
             if(PreventBackOut) return;
 
-            if(CurrentPaneType != InventoryPaneList.PaneTypes.Map)
+            if(CurrentPaneType == InventoryPaneList.PaneTypes.Map)
             {
-                TabbingControlFSM.SendEvent("BACK"); // doesn't work zoomed in... but otherwise ok
+                MapBack();
                 return;
             }
 
-            MapBack();
+            if(CurrentPaneType == InventoryPaneList.PaneTypes.Tools)
+            {
+                ToolsBack();
+                return;
+            }
+            
+            // default
+            TabbingControlFSM.SendEvent("BACK");
         }
 
         private static void MapBack()
@@ -1050,6 +1092,18 @@ public class Plugin : BaseUnityPlugin
             }
             
             mapZoomStateFsm.SendEvent("UI CANCEL");
+        }
+
+        private static void ToolsBack()
+        {
+            InventoryItemToolManager InvItemMgr = CurrentPaneObject.GetComponent<InventoryItemToolManager>();
+            if(InvItemMgr.EquipState != InventoryItemToolManager.EquipStates.None)
+            {
+                DoInjectMenuCancel = true;
+                return;
+            }
+            
+            TabbingControlFSM.SendEvent("BACK");
         }
     }
 
@@ -1327,6 +1381,11 @@ public class Plugin : BaseUnityPlugin
                 DoInjectMenuSuper = false;
             
                 // Logger.LogInfo("State " + SafeToString(Platform.Current.GetMenuAction(InputHandler.Instance.inputActions)));
+            }
+            if(DoInjectMenuCancel)
+            {
+                InputHandler.Instance.inputActions.MenuCancel.thisState.State = true;
+                DoInjectMenuCancel = false;
             }
         }
     }
