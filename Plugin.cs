@@ -116,6 +116,13 @@ public class Plugin : BaseUnityPlugin
     private static bool DoInjectMenuCancel = false;
 
     private static bool PreventBackOut = false; // Rosarie cannon reload hack
+
+    public static bool IsCrestSelectionHappening()
+    {
+        if(CurrentPaneType != InventoryPaneList.PaneTypes.Tools) return false;
+        InventoryItemToolManager InvItemMgr = CurrentPaneObject.GetComponent<InventoryItemToolManager>();
+        return InvItemMgr.EquipState == InventoryItemToolManager.EquipStates.SwitchCrest;
+    }
     
     private void Awake() // Mod startup
     {
@@ -203,7 +210,9 @@ public class Plugin : BaseUnityPlugin
         {
             // Logger.LogInfo("reset state? on " + SafeToString(gameObject.name));
             // Logger.LogDebug("Targeting correct method");
-            CurrentPanesCursorControlFsm.SetState(stateName);
+
+            // if(!IsCrestSelectionHappening())
+                CurrentPanesCursorControlFsm.SetState(stateName);
         }
     }
 
@@ -241,7 +250,15 @@ public class Plugin : BaseUnityPlugin
     public class OnClickInventoryItem : OnClickClass
     {
         // InventoryItemSelectable OwnSelectable;
+        protected override void ClickFunction()
+        {
+            if(IsInCrestSelection()) 
+            {
+                return; // if in crest selection, don't click slots or items in bg.
+            }
 
+            base.ClickFunction();
+        }
         
         protected override void MouseOverFunction()
         {
@@ -251,6 +268,11 @@ public class Plugin : BaseUnityPlugin
             // Or we could just wait until the pane is grabbed
             if(CurrentPaneObject == null) return;
             // so this is more-or-less just an error-squelch.
+
+            if(IsInCrestSelection()) 
+            {
+                return; // if in crest selection, don't hover slots or items in bg.
+            }
 
             var ownSelectable = GetOwnSelectable();
 
@@ -270,6 +292,13 @@ public class Plugin : BaseUnityPlugin
         private InventoryItemSelectable GetOwnSelectable()
         {
             return this.gameObject.GetComponent<InventoryItemSelectable>();
+        }
+
+        private bool IsInCrestSelection()
+        {
+            // if(!name.Contains("Slot")) 
+            //     return false;
+            return IsCrestSelectionHappening();
         }
     }
 
