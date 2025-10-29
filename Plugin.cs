@@ -124,6 +124,12 @@ public class Plugin : BaseUnityPlugin
         return InvItemMgr.EquipState == InventoryItemToolManager.EquipStates.SwitchCrest;
     }
     
+    public static bool IsBorderDisabledScreen()
+    {
+        // we could add the map things here.
+        return IsCrestSelectionHappening();
+    }
+    
     private void Awake() // Mod startup
     {
         Logger = base.Logger;
@@ -220,12 +226,14 @@ public class Plugin : BaseUnityPlugin
     {
         protected override void ClickFunction()
         {
+            if(IsBorderDisabledScreen()) return;
             // Logger.LogInfo("Go to Pane " + SafeToString(targetPane));
             SwitchInventoryTabTo(GetTargetPane());
         }
         
         protected override void MouseOverFunction()
         {
+            if(IsBorderDisabledScreen()) return;
             // Logger.LogInfo("mouseover on " + SafeToString(gameObject.name));
             VisualSelectMyObj();
         }
